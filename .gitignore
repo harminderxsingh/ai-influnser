@@ -1,0 +1,14 @@
+# Dependencies
+node_modules
+/client/node_modules
+/client/build
+
+# Sensitive config — contains DB creds, JWT secret, URLs
+config.json
+.env
+client/.env
+
+# OS / logs
+.DS_Store
+__MACOSX/
+*.log

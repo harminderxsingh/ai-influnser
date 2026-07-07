@@ -2,16 +2,25 @@
 
 AI influencer / avatar platform with Node.js backend, React frontend, payments, credits, referrals, and admin panel.
 
-## Setup
+## Local development
 
 1. Copy `.env.example` → `.env` and `client/.env.example` → `client/.env`
-2. Configure `config.json` (database, JWT, URLs) or run `/setup` wizard
+2. Configure `config.json` or run `/setup`
 3. `npm install` and `npm --prefix client install`
-4. `npm run build:site` (creates `client/build`)
-5. `npm start`
+4. `npm start` (backend) and `npm --prefix client start` (frontend dev)
 
-Server serves the React app from `client/build`. Uploaded files stay in `client/public/media`.
+## Production build (local only, then git push)
+
+```bash
+npm run build:site
+```
+
+This builds React to `client/build`, then copies output into `client/public` (keeps `media/` and `assets/`). Commit `client/public` and push. Server does not build on deploy.
+
+## cPanel deploy
+
+Server only runs `npm install --production` and restarts Node.
 
 ## Live domain
 
-Configured for: https://myavatarlab.com
+https://myavatarlab.com

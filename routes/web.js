@@ -510,9 +510,7 @@ router.post("/save_web_public", adminValidator, async (req, res) => {
       const [freshData] = await query(`SELECT * FROM web_public`, []);
       if (freshData) {
         const bakedHtml = injectMetaIntoHtml(freshData);
-        const buildIndex = path.join(__dirname, "../client/build/index.html");
-        const publicIndex = path.join(__dirname, "../client/public/index.html");
-        const indexPath = fs.existsSync(buildIndex) ? buildIndex : publicIndex;
+        const indexPath = path.join(__dirname, "../client/public/index.html");
         fs.writeFileSync(indexPath, bakedHtml, "utf8");
       }
     } catch (bakeErr) {

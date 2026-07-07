@@ -64,22 +64,15 @@ app.use("/api/tiktok", require("./routes/tiktok"));
 app.use("/api/talking", require("./routes/talkingVideo"));
 app.use("/api/social-publishing", require("./routes/social-publishing"));
 
-// Serve React app from build (production). Fallback to public for local/dev.
-const clientRoot = path.resolve(__dirname, "./client");
-const publicDir = path.join(clientRoot, "public");
-const buildDir = path.join(clientRoot, "build");
-const frontendDir = fs.existsSync(path.join(buildDir, "index.html"))
-  ? buildDir
-  : publicDir;
+// Pre-built React app in client/public (build:site copies client/build → public).
+const publicRoot = path.resolve(__dirname, "./client/public");
 
-// Uploaded media and demo assets always live in public/
-app.use("/media", express.static(path.join(publicDir, "media")));
-app.use("/assets", express.static(path.join(publicDir, "assets")));
-
-app.use(express.static(frontendDir));
+app.use("/media", express.static(path.join(publicRoot, "media")));
+app.use("/assets", express.static(path.join(publicRoot, "assets")));
+app.use(express.static(publicRoot));
 
 app.get("/{*path}", (req, res) => {
-  res.sendFile(path.join(frontendDir, "index.html"));
+  res.sendFile(path.join(publicRoot, "index.html"));
 });
 
 // Get port from config or default

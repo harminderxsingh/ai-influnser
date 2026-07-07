@@ -64,11 +64,19 @@ app.use("/api/tiktok", require("./routes/tiktok"));
 app.use("/api/talking", require("./routes/talkingVideo"));
 app.use("/api/social-publishing", require("./routes/social-publishing"));
 
-// Serve React app ONLY when database is configured (redirect handles the rest)
-app.use(express.static(path.resolve(__dirname, "./client/public")));
+const clientRoot = path.resolve(__dirname, "./client");
+const publicDir = path.join(clientRoot, "public");
+const buildDir = path.join(clientRoot, "build");
+const frontendDir = fs.existsSync(path.join(buildDir, "index.html"))
+  ? buildDir
+  : publicDir;
+
+app.use("/media", express.static(path.join(publicDir, "media")));
+app.use("/assets", express.static(path.join(publicDir, "assets")));
+app.use(express.static(frontendDir));
 
 app.get("/{*path}", (req, res) => {
-  res.sendFile(path.resolve(__dirname, "./client/public", "index.html"));
+  res.sendFile(path.join(frontendDir, "index.html"));
 });
 
 // Get port from config or default

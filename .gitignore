@@ -1,7 +1,6 @@
 # Dependencies
 node_modules
 /client/node_modules
-/client/build
 
 # Sensitive config — contains DB creds, JWT secret, URLs
 config.json

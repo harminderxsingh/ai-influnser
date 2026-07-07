@@ -6,8 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
     "build:client": "npm --prefix client run build",
-    "deploy:client": "node scripts/deploy-build.js",
-    "build:site": "npm run build:client && npm run deploy:client"
+    "build:site": "npm run build:client"
   },
   "dependencies": {
     "@paypal/checkout-server-sdk": "^1.0.3",

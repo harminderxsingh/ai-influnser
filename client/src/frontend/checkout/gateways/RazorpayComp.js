@@ -20,7 +20,6 @@ function loadRazorpayScript() {
 const RazorpayComp = ({
   plan,
   productType = "plan",
-  purchaseMode = "payment",
   billingInterval = "monthly",
   country,
   paying,
@@ -44,18 +43,13 @@ const RazorpayComp = ({
 
     // 2. create order on backend
     const res = await hitAxios({
-      path:
-        purchaseMode === "subscription"
-          ? "/api/payment/razorpay/create-subscription"
-          : "/api/payment/razorpay/create-order",
+      path: "/api/payment/razorpay/create-order",
       admin: false,
       post: true,
       obj: withCountry(
-        purchaseMode === "subscription"
-          ? { plan_id: plan.id, billing_interval: billingInterval, country }
-          : productType === "credit_package"
-            ? { product_type: productType, package_id: plan.id, country }
-            : { plan_id: plan.id, country },
+        productType === "credit_package"
+          ? { product_type: productType, package_id: plan.id, country }
+          : { plan_id: plan.id, billing_interval: billingInterval, country },
       ),
     });
 
@@ -66,7 +60,6 @@ const RazorpayComp = ({
 
     const {
       orderId,
-      subscriptionId,
       amount,
       currency,
       keyId,
@@ -80,40 +73,27 @@ const RazorpayComp = ({
       currency: currency,
       name: planMeta.title,
       description: planMeta.description,
-      ...(purchaseMode === "subscription"
-        ? { subscription_id: subscriptionId }
-        : { order_id: orderId }),
+      order_id: orderId,
 
       handler: async function (response) {
         // 4. verify on backend after user pays
         const verifyRes = await hitAxios({
-          path:
-            purchaseMode === "subscription"
-              ? "/api/payment/razorpay/verify-subscription"
-              : "/api/payment/razorpay/verify-order",
+          path: "/api/payment/razorpay/verify-order",
           admin: false,
           post: true,
-          obj:
-            purchaseMode === "subscription"
-              ? {
-                  razorpay_subscription_id:
-                    response.razorpay_subscription_id || subscriptionId,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                }
-              : {
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  ...(productType === "credit_package"
-                    ? { product_type: productType, package_id: plan.id }
-                    : { plan_id: plan.id }),
-                },
+          obj: {
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+            ...(productType === "credit_package"
+              ? { product_type: productType, package_id: plan.id }
+              : { plan_id: plan.id, billing_interval: billingInterval }),
+          },
         });
 
         if (verifyRes.data.success) {
           // redirect to success page
-          window.location.href = `/checkout/success?gateway=razorpay&verified=1&product_type=${purchaseMode === "subscription" ? "plan_subscription" : productType}`;
+          window.location.href = `/checkout/success?gateway=razorpay&verified=1&product_type=${productType}`;
         } else {
           alert(verifyRes.data.msg || "Payment verification failed");
           setPaying("");

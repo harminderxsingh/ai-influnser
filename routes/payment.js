@@ -120,6 +120,8 @@ async function getPurchaseItem({ productType, productId }) {
     packageId: null,
     title: plan.title,
     price: plan.price,
+    monthlyPrice: plan.monthly_price,
+    yearlyPrice: plan.yearly_price,
     credits: plan.credits,
     expiryDays: plan.expiry_days,
     description: `${plan.credits} credits · ${plan.expiry_days} days`,
@@ -134,6 +136,20 @@ function getPurchaseMetadata(item, uid) {
       ? { package_id: String(item.packageId) }
       : { plan_id: String(item.planId) }),
   };
+}
+
+function getPurchaseBillingInterval(item, billingInterval) {
+  if (item.productType !== "plan" || !billingInterval) return null;
+  return normalizeBillingInterval(billingInterval);
+}
+
+function getPurchaseAmount(item, billingInterval = null) {
+  if (item.productType === "plan" && billingInterval) {
+    return billingInterval === "yearly"
+      ? item.yearlyPrice || item.price
+      : item.monthlyPrice || item.price;
+  }
+  return item.price;
 }
 
 function getCancelPath(item) {
@@ -182,63 +198,6 @@ function getPlanPriceForInterval(plan, billingInterval) {
       ? plan.yearly_price || plan.price
       : plan.monthly_price || plan.price;
   return parseFloat(price || 0);
-}
-
-async function getSubscriptionPlan({ planId, billingInterval }) {
-  const [plan] = await query(`SELECT * FROM plan WHERE id = ? LIMIT 1`, [planId]);
-  if (!plan) throw new Error("Plan not found");
-  if (Number(plan.recurring_enabled ?? 1) !== 1) {
-    throw new Error("Recurring subscription is not enabled for this plan");
-  }
-  const interval = normalizeBillingInterval(billingInterval);
-  const amount = getPlanPriceForInterval(plan, interval);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error("Invalid subscription amount");
-  }
-  return { plan, billingInterval: interval, amount };
-}
-
-function getSubscriptionPeriodEnd(billingInterval) {
-  const end = new Date();
-  if (billingInterval === "yearly") {
-    end.setFullYear(end.getFullYear() + 1);
-  } else {
-    end.setMonth(end.getMonth() + 1);
-  }
-  return end;
-}
-
-async function saveSubscription({
-  uid,
-  planId,
-  billingInterval,
-  amount,
-  gateway,
-  gatewaySubscriptionId,
-  gatewayCustomerId = null,
-  status = "active",
-  meta = {},
-}) {
-  const now = new Date();
-  const periodEnd = getSubscriptionPeriodEnd(billingInterval);
-  return await query(
-    `INSERT INTO subscriptions
-      (uid, plan_id, billing_interval, amount, gateway, gateway_subscription_id, gateway_customer_id, status, current_period_start, current_period_end, meta)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      uid,
-      planId,
-      billingInterval,
-      amount,
-      gateway,
-      gatewaySubscriptionId,
-      gatewayCustomerId,
-      status,
-      now,
-      periodEnd,
-      JSON.stringify(meta),
-    ],
-  );
 }
 
 // ── helper ───────────────────────────────────────────────────────────────────
@@ -404,6 +363,11 @@ router.post("/stripe/create-session", userValidator, async (req, res) => {
   try {
     const uid = req.decode.uid;
     const item = await getPurchaseItem(getPurchaseInput(req.body));
+    const billingInterval = getPurchaseBillingInterval(
+      item,
+      req.body.billing_interval,
+    );
+    const amount = getPurchaseAmount(item, billingInterval);
 
     const { secretKey } = await getStripeKeys();
     const { symbol, code, rate } = await getCurrency(req); // ← currency
@@ -416,10 +380,12 @@ router.post("/stripe/create-session", userValidator, async (req, res) => {
         {
           price_data: {
             currency: code.toLowerCase(), // ← dynamic
-            unit_amount: toSmallestUnit(item.price, rate, code), // ← converted
+            unit_amount: toSmallestUnit(amount, rate, code), // ← converted
             product_data: {
               name: item.title,
-              description: item.description,
+              description: billingInterval
+                ? `${item.credits} credits · ${billingInterval}`
+                : item.description,
             },
           },
           quantity: 1,
@@ -428,7 +394,10 @@ router.post("/stripe/create-session", userValidator, async (req, res) => {
       mode: "payment",
       success_url: `${appUrl}/checkout/success?gateway=stripe&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}${getCancelPath(item)}?cancelled=true`,
-      metadata: getPurchaseMetadata(item, uid),
+      metadata: {
+        ...getPurchaseMetadata(item, uid),
+        ...(billingInterval ? { billing_interval: billingInterval } : {}),
+      },
     });
 
     res.json({ success: true, url: session.url });
@@ -437,66 +406,6 @@ router.post("/stripe/create-session", userValidator, async (req, res) => {
     res.json({
       success: false,
       msg: err.message || "Stripe session creation failed",
-    });
-  }
-});
-
-// ── POST /api/payment/stripe/create-subscription ──────────────────────────────
-router.post("/stripe/create-subscription", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const { plan_id, billing_interval } = req.body;
-    const { plan, billingInterval, amount } = await getSubscriptionPlan({
-      planId: plan_id,
-      billingInterval: billing_interval,
-    });
-    const { secretKey } = await getStripeKeys();
-    const { code, rate } = await getCurrency(req);
-    const appUrl = process.env.APP_URL || "https://myavatarlab.com";
-    const stripe = require("stripe")(secretKey);
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "subscription",
-      line_items: [
-        {
-          price_data: {
-            currency: code.toLowerCase(),
-            unit_amount: toSmallestUnit(amount, rate, code),
-            recurring: {
-              interval: billingInterval === "yearly" ? "year" : "month",
-            },
-            product_data: {
-              name: plan.title,
-              description: `${plan.credits} credits · ${billingInterval} subscription`,
-            },
-          },
-          quantity: 1,
-        },
-      ],
-      success_url: `${appUrl}/checkout/success?gateway=stripe&session_id={CHECKOUT_SESSION_ID}&mode=subscription`,
-      cancel_url: `${appUrl}/checkout/${plan.id}?billing=${billingInterval}&cancelled=true`,
-      metadata: {
-        product_type: "plan_subscription",
-        plan_id: String(plan.id),
-        uid: String(uid),
-        billing_interval: billingInterval,
-      },
-      subscription_data: {
-        metadata: {
-          plan_id: String(plan.id),
-          uid: String(uid),
-          billing_interval: billingInterval,
-        },
-      },
-    });
-
-    res.json({ success: true, url: session.url });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Stripe subscription creation failed",
     });
   }
 });
@@ -518,45 +427,6 @@ router.post("/stripe/verify-session", userValidator, async (req, res) => {
     // must belong to this user
     if (String(session.metadata.uid) !== String(uid)) {
       return res.json({ success: false, msg: "Unauthorized" });
-    }
-
-    if (session.mode === "subscription") {
-      const billingInterval = normalizeBillingInterval(
-        session.metadata.billing_interval,
-      );
-      const { plan, amount } = await getSubscriptionPlan({
-        planId: session.metadata.plan_id,
-        billingInterval,
-      });
-
-      const existingSubscription = await query(
-        `SELECT id FROM subscriptions WHERE gateway = 'stripe' AND gateway_subscription_id = ? LIMIT 1`,
-        [session.subscription],
-      );
-      if (!existingSubscription.length) {
-        await saveSubscription({
-          uid,
-          planId: plan.id,
-          billingInterval,
-          amount,
-          gateway: "stripe",
-          gatewaySubscriptionId: session.subscription,
-          gatewayCustomerId: session.customer,
-          meta: {
-            session_id: session.id,
-            payment_intent: session.payment_intent,
-          },
-        });
-      }
-
-      const result = await updateUserPlan({ planId: plan.id, uid });
-      if (!result.success) return res.json({ success: false, msg: result.msg });
-
-      return res.json({
-        success: true,
-        msg: "Subscription activated successfully!",
-        product_type: "plan_subscription",
-      });
     }
 
     const item = await getPurchaseItem({
@@ -590,6 +460,9 @@ router.post("/stripe/verify-session", userValidator, async (req, res) => {
         session_id: session.id,
         payment_intent: session.payment_intent,
         customer_email: session.customer_details?.email || null,
+        ...(session.metadata?.billing_interval
+          ? { billing_interval: session.metadata.billing_interval }
+          : {}),
       },
     });
 
@@ -636,135 +509,16 @@ async function getPayPalClient() {
   return new paypal.core.PayPalHttpClient(environment);
 }
 
-async function getPayPalAccessToken() {
-  const data = await query(`SELECT * FROM web_private LIMIT 1`, []);
-  if (!data.length) throw new Error("No settings found");
-  const { pay_paypal_id, pay_paypal_key, paypal_active } = data[0];
-  if (!paypal_active) throw new Error("PayPal is not enabled");
-  const auth = Buffer.from(`${pay_paypal_id}:${pay_paypal_key}`).toString(
-    "base64",
-  );
-  const response = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error_description || result.error);
-  return result.access_token;
-}
-
-router.post("/paypal/create-subscription", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const { plan_id, billing_interval } = req.body;
-    const { plan, billingInterval, amount } = await getSubscriptionPlan({
-      planId: plan_id,
-      billingInterval: billing_interval,
-    });
-    const { code, rate } = await getCurrency(req);
-    const appUrl = process.env.APP_URL || "https://myavatarlab.com";
-    const accessToken = await getPayPalAccessToken();
-    const headers = {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    };
-
-    const productRes = await fetch("https://api-m.paypal.com/v1/catalogs/products", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        name: plan.title,
-        type: "SERVICE",
-        category: "SOFTWARE",
-      }),
-    });
-    const product = await productRes.json();
-    if (!productRes.ok) throw new Error(product.message || "PayPal product creation failed");
-
-    const localAmount = toLocalAmount(amount, rate);
-    const planRes = await fetch("https://api-m.paypal.com/v1/billing/plans", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        product_id: product.id,
-        name: `${plan.title} ${billingInterval}`,
-        billing_cycles: [
-          {
-            frequency: {
-              interval_unit: billingInterval === "yearly" ? "YEAR" : "MONTH",
-              interval_count: 1,
-            },
-            tenure_type: "REGULAR",
-            sequence: 1,
-            total_cycles: 0,
-            pricing_scheme: {
-              fixed_price: {
-                value: localAmount.toFixed(2),
-                currency_code: code.toUpperCase(),
-              },
-            },
-          },
-        ],
-        payment_preferences: {
-          auto_bill_outstanding: true,
-          setup_fee_failure_action: "CONTINUE",
-          payment_failure_threshold: 3,
-        },
-      }),
-    });
-    const paypalPlan = await planRes.json();
-    if (!planRes.ok) throw new Error(paypalPlan.message || "PayPal plan creation failed");
-
-    const subRes = await fetch("https://api-m.paypal.com/v1/billing/subscriptions", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        plan_id: paypalPlan.id,
-        custom_id: JSON.stringify({
-          uid,
-          plan_id: String(plan.id),
-          billing_interval: billingInterval,
-        }),
-        application_context: {
-          brand_name: process.env.APP_NAME || "MyAvatarLab",
-          user_action: "SUBSCRIBE_NOW",
-          return_url: `${appUrl}/checkout/success?gateway=paypal&mode=subscription`,
-          cancel_url: `${appUrl}/checkout/${plan.id}?billing=${billingInterval}&cancelled=true`,
-        },
-      }),
-    });
-    const subscription = await subRes.json();
-    if (!subRes.ok) throw new Error(subscription.message || "PayPal subscription creation failed");
-    const approveUrl = subscription.links?.find((l) => l.rel === "approve")?.href;
-    if (!approveUrl) throw new Error("PayPal approval URL not found");
-
-    await saveSubscription({
-      uid,
-      planId: plan.id,
-      billingInterval,
-      amount,
-      gateway: "paypal",
-      gatewaySubscriptionId: subscription.id,
-      status: "pending",
-      meta: { paypal_plan_id: paypalPlan.id, paypal_product_id: product.id },
-    });
-
-    res.json({ success: true, url: approveUrl, subscriptionId: subscription.id });
-  } catch (err) {
-    console.log(err);
-    res.json({ success: false, msg: err.message || "PayPal subscription creation failed" });
-  }
-});
-
 // ── POST /api/payment/paypal/create-order ─────────────────────────────────────
 router.post("/paypal/create-order", userValidator, async (req, res) => {
   try {
     const uid = req.decode.uid;
     const item = await getPurchaseItem(getPurchaseInput(req.body));
+    const billingInterval = getPurchaseBillingInterval(
+      item,
+      req.body.billing_interval,
+    );
+    const amount = getPurchaseAmount(item, billingInterval);
 
     // ✅ FIX: no destructuring
     const client = await getPayPalClient();
@@ -772,7 +526,11 @@ router.post("/paypal/create-order", userValidator, async (req, res) => {
     const { code, rate } = await getCurrency(req);
     const appUrl = process.env.APP_URL || "https://myavatarlab.com";
 
-    const localAmount = toLocalAmount(item.price, rate);
+    const localAmount = toLocalAmount(amount, rate);
+    const metadata = {
+      ...getPurchaseMetadata(item, uid),
+      ...(billingInterval ? { billing_interval: billingInterval } : {}),
+    };
 
     const request = new paypal.orders.OrdersCreateRequest();
     request.prefer("return=representation");
@@ -785,8 +543,12 @@ router.post("/paypal/create-order", userValidator, async (req, res) => {
             currency_code: code.toUpperCase(),
             value: localAmount.toFixed(2),
           },
-          description: `${item.title} — ${item.description}`,
-          custom_id: JSON.stringify(getPurchaseMetadata(item, uid)),
+          description: `${item.title} — ${
+            billingInterval
+              ? `${item.credits} credits · ${billingInterval}`
+              : item.description
+          }`,
+          custom_id: JSON.stringify(metadata),
         },
       ],
       application_context: {
@@ -892,6 +654,9 @@ router.post("/paypal/verify-order", userValidator, async (req, res) => {
         capture_id: captureId,
         payer_email: payerEmail,
         payer_id: payerId,
+        ...(parsed.billing_interval
+          ? { billing_interval: parsed.billing_interval }
+          : {}),
       },
     });
 
@@ -938,15 +703,23 @@ router.post("/razorpay/create-order", userValidator, async (req, res) => {
   try {
     const uid = req.decode.uid;
     const item = await getPurchaseItem(getPurchaseInput(req.body));
+    const billingInterval = getPurchaseBillingInterval(
+      item,
+      req.body.billing_interval,
+    );
+    const amount = getPurchaseAmount(item, billingInterval);
 
     const { instance, rz_id } = await getRazorpayInstance();
     const { symbol, code, rate } = await getCurrency(req); // ← currency
 
     const order = await instance.orders.create({
-      amount: toSmallestUnit(item.price, rate, code), // ← converted
+      amount: toSmallestUnit(amount, rate, code), // ← converted
       currency: code.toUpperCase(), // ← dynamic
       receipt: `receipt_${uid}_${item.productType}_${item.planId || item.packageId}_${Date.now()}`,
-      notes: getPurchaseMetadata(item, uid),
+      notes: {
+        ...getPurchaseMetadata(item, uid),
+        ...(billingInterval ? { billing_interval: billingInterval } : {}),
+      },
     });
 
     res.json({
@@ -957,7 +730,9 @@ router.post("/razorpay/create-order", userValidator, async (req, res) => {
       keyId: rz_id,
       plan: {
         title: item.title,
-        description: item.description,
+        description: billingInterval
+          ? `${item.credits} credits · ${billingInterval}`
+          : item.description,
       },
     });
   } catch (err) {
@@ -965,73 +740,6 @@ router.post("/razorpay/create-order", userValidator, async (req, res) => {
     res.json({
       success: false,
       msg: err.message || "Razorpay order creation failed",
-    });
-  }
-});
-
-router.post("/razorpay/create-subscription", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const { plan_id, billing_interval } = req.body;
-    const { plan, billingInterval, amount } = await getSubscriptionPlan({
-      planId: plan_id,
-      billingInterval: billing_interval,
-    });
-    const { instance, rz_id } = await getRazorpayInstance();
-    const { code, rate } = await getCurrency(req);
-
-    const razorpayPlan = await instance.plans.create({
-      period: billingInterval === "yearly" ? "yearly" : "monthly",
-      interval: 1,
-      item: {
-        name: `${plan.title} ${billingInterval}`,
-        amount: toSmallestUnit(amount, rate, code),
-        currency: code.toUpperCase(),
-        description: `${plan.credits} credits`,
-      },
-      notes: {
-        uid: String(uid),
-        plan_id: String(plan.id),
-        billing_interval: billingInterval,
-      },
-    });
-
-    const subscription = await instance.subscriptions.create({
-      plan_id: razorpayPlan.id,
-      total_count: billingInterval === "yearly" ? 10 : 120,
-      customer_notify: 1,
-      notes: {
-        uid: String(uid),
-        plan_id: String(plan.id),
-        billing_interval: billingInterval,
-      },
-    });
-
-    await saveSubscription({
-      uid,
-      planId: plan.id,
-      billingInterval,
-      amount,
-      gateway: "razorpay",
-      gatewaySubscriptionId: subscription.id,
-      status: "pending",
-      meta: { razorpay_plan_id: razorpayPlan.id },
-    });
-
-    res.json({
-      success: true,
-      subscriptionId: subscription.id,
-      keyId: rz_id,
-      plan: {
-        title: plan.title,
-        description: `${plan.credits} credits · ${billingInterval}`,
-      },
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Razorpay subscription creation failed",
     });
   }
 });
@@ -1046,6 +754,7 @@ router.post("/razorpay/verify-order", userValidator, async (req, res) => {
       plan_id,
       package_id,
       product_type,
+      billing_interval,
     } = req.body;
     const uid = req.decode.uid;
 
@@ -1077,22 +786,25 @@ router.post("/razorpay/verify-order", userValidator, async (req, res) => {
     const item = await getPurchaseItem(
       getPurchaseInput({ plan_id, package_id, product_type }),
     );
+    const billingInterval = getPurchaseBillingInterval(item, billing_interval);
+    const amount = parseFloat(getPurchaseAmount(item, billingInterval));
 
     const order = await savePaidOrder({
       uid,
       item,
-      amount: parseFloat(item.price),
+      amount,
       gateway: "razorpay",
       meta: {
         order_id: razorpay_order_id,
         payment_id: razorpay_payment_id,
         signature: razorpay_signature,
+        ...(billingInterval ? { billing_interval: billingInterval } : {}),
       },
     });
 
     const result = await fulfillPurchase(item, uid, {
       gateway: "razorpay",
-      amount: parseFloat(item.price),
+      amount,
       orderId: order.insertId,
     });
     if (!result.success) return res.json({ success: false, msg: result.msg });
@@ -1107,54 +819,6 @@ router.post("/razorpay/verify-order", userValidator, async (req, res) => {
     res.json({
       success: false,
       msg: err.message || "Razorpay verification failed",
-    });
-  }
-});
-
-router.post("/razorpay/verify-subscription", userValidator, async (req, res) => {
-  try {
-    const {
-      razorpay_subscription_id,
-      razorpay_payment_id,
-      razorpay_signature,
-    } = req.body;
-    const uid = req.decode.uid;
-    const { rz_key } = await getRazorpayInstance();
-    const expectedSignature = crypto
-      .createHmac("sha256", rz_key)
-      .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
-      .digest("hex");
-
-    if (expectedSignature !== razorpay_signature) {
-      return res.json({ success: false, msg: "Invalid subscription signature" });
-    }
-
-    const [subscription] = await query(
-      `SELECT * FROM subscriptions WHERE gateway = 'razorpay' AND gateway_subscription_id = ? AND uid = ? LIMIT 1`,
-      [razorpay_subscription_id, uid],
-    );
-    if (!subscription) {
-      return res.json({ success: false, msg: "Subscription record not found" });
-    }
-
-    await query(
-      `UPDATE subscriptions SET status = 'active', meta = JSON_SET(COALESCE(meta, JSON_OBJECT()), '$.payment_id', ?, '$.signature', ?) WHERE id = ?`,
-      [razorpay_payment_id, razorpay_signature, subscription.id],
-    );
-
-    const result = await updateUserPlan({ planId: subscription.plan_id, uid });
-    if (!result.success) return res.json({ success: false, msg: result.msg });
-
-    res.json({
-      success: true,
-      msg: "Subscription activated successfully!",
-      product_type: "plan_subscription",
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Razorpay subscription verification failed",
     });
   }
 });
@@ -1175,6 +839,11 @@ router.post("/paystack/create-order", userValidator, async (req, res) => {
   try {
     const uid = req.decode.uid;
     const item = await getPurchaseItem(getPurchaseInput(req.body));
+    const billingInterval = getPurchaseBillingInterval(
+      item,
+      req.body.billing_interval,
+    );
+    const amount = getPurchaseAmount(item, billingInterval);
 
     const users = await query(`SELECT * FROM user WHERE uid = ? LIMIT 1`, [
       uid,
@@ -1198,11 +867,12 @@ router.post("/paystack/create-order", userValidator, async (req, res) => {
         },
         body: JSON.stringify({
           email: user.email,
-          amount: toSmallestUnit(item.price, rate, code), // ← converted
+          amount: toSmallestUnit(amount, rate, code), // ← converted
           currency: code.toUpperCase(), // ← dynamic
           reference: reference,
           metadata: {
             ...getPurchaseMetadata(item, uid),
+            ...(billingInterval ? { billing_interval: billingInterval } : {}),
             product_title: item.title,
           },
           callback_url: `${appUrl}/checkout/success?gateway=paystack`,
@@ -1229,103 +899,6 @@ router.post("/paystack/create-order", userValidator, async (req, res) => {
     res.json({
       success: false,
       msg: err.message || "Paystack order creation failed",
-    });
-  }
-});
-
-router.post("/paystack/create-subscription", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const { plan_id, billing_interval } = req.body;
-    const { plan, billingInterval, amount } = await getSubscriptionPlan({
-      planId: plan_id,
-      billingInterval: billing_interval,
-    });
-    const users = await query(`SELECT * FROM user WHERE uid = ? LIMIT 1`, [
-      uid,
-    ]);
-    if (!users.length) return res.json({ success: false, msg: "User not found" });
-    const user = users[0];
-    const { secretKey, publicKey } = await getPaystackKeys();
-    const { code, rate } = await getCurrency(req);
-    const appUrl = process.env.APP_URL || "https://myavatarlab.com";
-
-    const planRes = await fetch("https://api.paystack.co/plan", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${secretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: `${plan.title} ${billingInterval}`,
-        amount: toSmallestUnit(amount, rate, code),
-        interval: billingInterval === "yearly" ? "annually" : "monthly",
-        currency: code.toUpperCase(),
-      }),
-    });
-    const paystackPlan = await planRes.json();
-    if (!paystackPlan.status) {
-      return res.json({
-        success: false,
-        msg: paystackPlan.message || "Paystack plan creation failed",
-      });
-    }
-
-    const reference = `pstk_sub_${uid}_${plan.id}_${billingInterval}_${Date.now()}`;
-    const initRes = await fetch(
-      "https://api.paystack.co/transaction/initialize",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${secretKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: user.email,
-          amount: toSmallestUnit(amount, rate, code),
-          currency: code.toUpperCase(),
-          reference,
-          plan: paystackPlan.data.plan_code,
-          metadata: {
-            product_type: "plan_subscription",
-            uid: String(uid),
-            plan_id: String(plan.id),
-            billing_interval: billingInterval,
-          },
-          callback_url: `${appUrl}/checkout/success?gateway=paystack&mode=subscription`,
-        }),
-      },
-    );
-    const initData = await initRes.json();
-    if (!initData.status) {
-      return res.json({
-        success: false,
-        msg: initData.message || "Paystack subscription init failed",
-      });
-    }
-
-    await saveSubscription({
-      uid,
-      planId: plan.id,
-      billingInterval,
-      amount,
-      gateway: "paystack",
-      gatewaySubscriptionId: paystackPlan.data.plan_code,
-      status: "pending",
-      meta: { reference, plan_code: paystackPlan.data.plan_code },
-    });
-
-    res.json({
-      success: true,
-      url: initData.data.authorization_url,
-      reference,
-      publicKey,
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Paystack subscription creation failed",
     });
   }
 });
@@ -1394,6 +967,9 @@ router.post("/paystack/verify-order", userValidator, async (req, res) => {
         transaction_id: String(txData.id),
         channel: txData.channel,
         payer_email: txData.customer?.email || null,
+        ...(txData.metadata?.billing_interval
+          ? { billing_interval: txData.metadata.billing_interval }
+          : {}),
       },
     });
 
@@ -1439,6 +1015,11 @@ router.post("/mercadopago/create-order", userValidator, async (req, res) => {
   try {
     const uid = req.decode.uid;
     const item = await getPurchaseItem(getPurchaseInput(req.body));
+    const billingInterval = getPurchaseBillingInterval(
+      item,
+      req.body.billing_interval,
+    );
+    const amount = getPurchaseAmount(item, billingInterval);
 
     const users = await query(`SELECT * FROM user WHERE uid = ? LIMIT 1`, [
       uid,
@@ -1452,7 +1033,7 @@ router.post("/mercadopago/create-order", userValidator, async (req, res) => {
     const appUrl = process.env.APP_URL || "https://myavatarlab.com";
     const preference = new Preference(client);
 
-    const localAmount = toLocalAmount(item.price, rate);
+    const localAmount = toLocalAmount(amount, rate);
 
     const response = await preference.create({
       body: {
@@ -1460,14 +1041,19 @@ router.post("/mercadopago/create-order", userValidator, async (req, res) => {
           {
             id: String(item.planId || item.packageId),
             title: item.title,
-            description: item.description,
+            description: billingInterval
+              ? `${item.credits} credits · ${billingInterval}`
+              : item.description,
             quantity: 1,
             unit_price: localAmount, // ← converted
             currency_id: code.toUpperCase(), // ← dynamic
           },
         ],
         payer: { email: user.email },
-        metadata: getPurchaseMetadata(item, uid),
+        metadata: {
+          ...getPurchaseMetadata(item, uid),
+          ...(billingInterval ? { billing_interval: billingInterval } : {}),
+        },
         external_reference: `mp_${uid}_${item.productType}_${item.planId || item.packageId}_${Date.now()}`,
         back_urls: {
           success: `${appUrl}/checkout/success?gateway=mercadopago`,
@@ -1488,87 +1074,6 @@ router.post("/mercadopago/create-order", userValidator, async (req, res) => {
     res.json({
       success: false,
       msg: err.message || "Mercado Pago order creation failed",
-    });
-  }
-});
-
-router.post("/mercadopago/create-subscription", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const { plan_id, billing_interval } = req.body;
-    const { plan, billingInterval, amount } = await getSubscriptionPlan({
-      planId: plan_id,
-      billingInterval: billing_interval,
-    });
-    const users = await query(`SELECT * FROM user WHERE uid = ? LIMIT 1`, [
-      uid,
-    ]);
-    if (!users.length) return res.json({ success: false, msg: "User not found" });
-    const user = users[0];
-    const data = await query(`SELECT * FROM web_private LIMIT 1`, []);
-    if (!data.length || !data[0].mercadopago_active) {
-      throw new Error("Mercado Pago is not enabled");
-    }
-    const accessToken = data[0].pay_mercadopago_access_token;
-    if (!accessToken) throw new Error("Mercado Pago access token not configured");
-    const { code, rate } = await getCurrency(req);
-    const appUrl = process.env.APP_URL || "https://myavatarlab.com";
-    const localAmount = toLocalAmount(amount, rate);
-    const externalReference = `mp_sub_${uid}_${plan.id}_${billingInterval}_${Date.now()}`;
-
-    const preapprovalRes = await fetch(
-      "https://api.mercadopago.com/preapproval",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          reason: `${plan.title} ${billingInterval}`,
-          external_reference: externalReference,
-          payer_email: user.email,
-          back_url: `${appUrl}/checkout/success?gateway=mercadopago&mode=subscription`,
-          auto_recurring: {
-            frequency: 1,
-            frequency_type: billingInterval === "yearly" ? "years" : "months",
-            transaction_amount: localAmount,
-            currency_id: code.toUpperCase(),
-          },
-          metadata: {
-            uid: String(uid),
-            plan_id: String(plan.id),
-            billing_interval: billingInterval,
-          },
-        }),
-      },
-    );
-    const preapproval = await preapprovalRes.json();
-    if (!preapprovalRes.ok) {
-      throw new Error(preapproval.message || "Mercado Pago preapproval failed");
-    }
-
-    await saveSubscription({
-      uid,
-      planId: plan.id,
-      billingInterval,
-      amount,
-      gateway: "mercadopago",
-      gatewaySubscriptionId: preapproval.id,
-      status: "pending",
-      meta: { external_reference: externalReference },
-    });
-
-    res.json({
-      success: true,
-      url: preapproval.init_point,
-      subscriptionId: preapproval.id,
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Mercado Pago subscription creation failed",
     });
   }
 });
@@ -1630,6 +1135,9 @@ router.post("/mercadopago/verify-order", userValidator, async (req, res) => {
         external_reference: external_reference,
         payment_type: paymentData.payment_type_id,
         payer_email: paymentData.payer?.email || null,
+        ...(paymentData.metadata?.billing_interval
+          ? { billing_interval: paymentData.metadata.billing_interval }
+          : {}),
       },
     });
 

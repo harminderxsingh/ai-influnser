@@ -43,8 +43,6 @@ const CheckoutSuccess = () => {
       setMsg(
         product_type === "credit_package"
           ? "Credits added successfully!"
-          : product_type === "plan_subscription"
-            ? "Subscription activated successfully!"
           : "Plan activated!",
       );
     } else if (gateway === "stripe" && session_id) {

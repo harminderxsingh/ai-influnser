@@ -8,7 +8,6 @@ import { withCountry } from "../../../utils/currency";
 const PaystackComp = ({
   plan,
   productType = "plan",
-  purchaseMode = "payment",
   billingInterval = "monthly",
   country,
   paying,
@@ -22,18 +21,13 @@ const PaystackComp = ({
   async function handlePaystack() {
     setPaying("paystack");
     const res = await hitAxios({
-      path:
-        purchaseMode === "subscription"
-          ? "/api/payment/paystack/create-subscription"
-          : "/api/payment/paystack/create-order",
+      path: "/api/payment/paystack/create-order",
       admin: false,
       post: true,
       obj: withCountry(
-        purchaseMode === "subscription"
-          ? { plan_id: plan.id, billing_interval: billingInterval, country }
-          : productType === "credit_package"
-            ? { product_type: productType, package_id: plan.id, country }
-            : { plan_id: plan.id, country },
+        productType === "credit_package"
+          ? { product_type: productType, package_id: plan.id, country }
+          : { plan_id: plan.id, billing_interval: billingInterval, country },
       ),
     });
     if (res.data.success) {

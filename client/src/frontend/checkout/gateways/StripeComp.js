@@ -8,7 +8,6 @@ import { withCountry } from "../../../utils/currency";
 const StripeComp = ({
   plan,
   productType = "plan",
-  purchaseMode = "payment",
   billingInterval = "monthly",
   country,
   paying,
@@ -22,18 +21,13 @@ const StripeComp = ({
   async function handleStripe() {
     setPaying("stripe");
     const res = await hitAxios({
-      path:
-        purchaseMode === "subscription"
-          ? "/api/payment/stripe/create-subscription"
-          : "/api/payment/stripe/create-session",
+      path: "/api/payment/stripe/create-session",
       admin: false,
       post: true,
       obj: withCountry(
-        purchaseMode === "subscription"
-          ? { plan_id: plan.id, billing_interval: billingInterval, country }
-          : productType === "credit_package"
-            ? { product_type: productType, package_id: plan.id, country }
-            : { plan_id: plan.id, country },
+        productType === "credit_package"
+          ? { product_type: productType, package_id: plan.id, country }
+          : { plan_id: plan.id, billing_interval: billingInterval, country },
       ),
     });
     if (res.data.success) {

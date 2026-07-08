@@ -41,7 +41,7 @@ const ManagePlans = ({ lang }) => {
     price: "",
     monthly_price: "",
     yearly_price: "",
-    recurring_enabled: true,
+    recurring_enabled: false,
     default_billing_interval: "monthly",
     price_strike: "",
     credits: "",
@@ -77,7 +77,7 @@ const ManagePlans = ({ lang }) => {
         price: plan.price,
         monthly_price: plan.monthly_price || plan.price,
         yearly_price: plan.yearly_price || Number(plan.price || 0) * 12,
-        recurring_enabled: plan.recurring_enabled !== 0,
+        recurring_enabled: false,
         default_billing_interval: plan.default_billing_interval || "monthly",
         price_strike: plan.price_strike,
         credits: plan.credits,
@@ -94,7 +94,7 @@ const ManagePlans = ({ lang }) => {
         price: "",
         monthly_price: "",
         yearly_price: "",
-        recurring_enabled: true,
+        recurring_enabled: false,
         default_billing_interval: "monthly",
         price_strike: "",
         credits: "",
@@ -114,7 +114,7 @@ const ManagePlans = ({ lang }) => {
       price: "",
       monthly_price: "",
       yearly_price: "",
-      recurring_enabled: true,
+      recurring_enabled: false,
       default_billing_interval: "monthly",
       price_strike: "",
       credits: "",
@@ -134,7 +134,7 @@ const ManagePlans = ({ lang }) => {
         price: state.monthly_price || state.price,
         monthly_price: state.monthly_price || state.price,
         yearly_price: state.yearly_price,
-        recurring_enabled: state.recurring_enabled,
+        recurring_enabled: false,
         default_billing_interval: state.default_billing_interval,
         price_strike: state.price_strike,
         credits: state.credits,
@@ -159,7 +159,7 @@ const ManagePlans = ({ lang }) => {
         price: state.monthly_price || state.price,
         monthly_price: state.monthly_price || state.price,
         yearly_price: state.yearly_price,
-        recurring_enabled: state.recurring_enabled,
+        recurring_enabled: false,
         default_billing_interval: state.default_billing_interval,
         price_strike: state.price_strike,
         credits: state.credits,
@@ -638,20 +638,6 @@ const ManagePlans = ({ lang }) => {
             </Grid>
 
             <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={state.recurring_enabled}
-                    onChange={(e) =>
-                      setState({
-                        ...state,
-                        recurring_enabled: e.target.checked,
-                      })
-                    }
-                  />
-                }
-                label={lang.recurringEnabled || "Enable Recurring Subscription"}
-              />
               <FormControlLabel
                 control={
                   <Switch

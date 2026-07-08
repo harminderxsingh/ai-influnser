@@ -112,11 +112,6 @@ const CheckOut = () => {
         : plan?.monthly_price || plan?.price
       : plan?.price;
 
-  const purchaseMode =
-    productType === "plan" && Number(plan?.recurring_enabled ?? 1) === 1
-      ? "subscription"
-      : "payment";
-
   const localPrice = plan ? convertPrice(selectedPrice || 0) : 0;
 
   const localPriceStrike = plan?.price_strike
@@ -236,7 +231,7 @@ const CheckOut = () => {
                       ` · 1 USD = ${currency.rate} ${currency.code.toUpperCase()}`}
                   </Typography>
 
-                  {productType === "plan" && purchaseMode === "subscription" && (
+                  {productType === "plan" && (
                     <Stack direction="row" spacing={1}>
                       {[
                         { key: "monthly", label: lang?.monthly || "Monthly" },
@@ -337,7 +332,6 @@ const CheckOut = () => {
                             key={key}
                             plan={plan}
                             productType={productType}
-                            purchaseMode={purchaseMode}
                             billingInterval={billingInterval}
                             gwData={gwData}
                             currency={currency}

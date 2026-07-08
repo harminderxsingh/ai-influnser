@@ -22,6 +22,8 @@ const FrontEnd = () => {
       path: "/api/web/get_web_public",
       post: false,
       admin: false,
+      showLoading: false,
+      showSnackbar: false,
     });
     if (res.data.success) {
       setWeb(res.data.data);

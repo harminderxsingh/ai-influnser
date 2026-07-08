@@ -79,6 +79,7 @@ const HomeMainPage = () => {
       {/* <SeoComp /> */}
       <Dialog
         fullScreen
+        disableScrollLock
         sx={{
           color: "#fff",
           zIndex: (theme) => theme.zIndex.modal + 99, // Higher than dialogs

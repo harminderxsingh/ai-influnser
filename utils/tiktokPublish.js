@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+const fetch = require("./fetch");
 
 async function publishToTiktok({ account, mediaUrl, mediaType, caption }) {
   // TikTok Content Posting API — Direct Post

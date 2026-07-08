@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+const fetch = require("./fetch");
 const { query } = require("../database/connection");
 const { getEnv } = require("./common");
 

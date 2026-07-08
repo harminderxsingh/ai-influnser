@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+const fetch = require("./fetch");
 const { API_VERSION } = require("./insta");
 
 // IMAGE post

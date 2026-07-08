@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { query } = require("../database/connection");
 const { getEnv } = require("../utils/common");
+const fetch = require("../utils/fetch");
 const validateUser = require("../middlewares/user");
 const {
   exchangeTiktokToken,

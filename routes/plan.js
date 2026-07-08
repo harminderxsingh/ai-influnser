@@ -20,22 +20,16 @@ router.post("/add_new", adminValidator, async (req, res) => {
     const {
       title,
       price,
-      monthly_price,
-      yearly_price,
-      recurring_enabled,
-      default_billing_interval,
       popular,
       price_strike,
       credits,
-      expiry_days,
       max_characters,
     } = req.body;
 
     if (
       !title ||
-      (price === undefined && monthly_price === undefined) ||
+      price === undefined ||
       !credits ||
-      !expiry_days ||
       !max_characters
     ) {
       return res.json({ msg: "Please fill all the required details" });
@@ -45,15 +39,15 @@ router.post("/add_new", adminValidator, async (req, res) => {
       `INSERT INTO plan (title, price, monthly_price, yearly_price, recurring_enabled, default_billing_interval, popular, price_strike, credits, expiry_days, max_characters) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         title,
-        price ?? monthly_price,
-        monthly_price ?? price,
-        yearly_price ?? Number(monthly_price ?? price ?? 0) * 12,
-        recurring_enabled ? 1 : 0,
-        default_billing_interval || "monthly",
+        price,
+        price,
+        price,
+        0,
+        "one_time",
         popular ? 1 : 0,
         price_strike || null,
         credits,
-        expiry_days,
+        0,
         max_characters,
       ],
     );
@@ -72,23 +66,17 @@ router.post("/edit", adminValidator, async (req, res) => {
       id,
       title,
       price,
-      monthly_price,
-      yearly_price,
-      recurring_enabled,
-      default_billing_interval,
       popular,
       price_strike,
       credits,
-      expiry_days,
       max_characters,
     } = req.body;
 
     if (
       !id ||
       !title ||
-      (price === undefined && monthly_price === undefined) ||
+      price === undefined ||
       !credits ||
-      !expiry_days ||
       !max_characters
     ) {
       return res.json({ msg: "Please fill all the required details" });
@@ -98,15 +86,15 @@ router.post("/edit", adminValidator, async (req, res) => {
       `UPDATE plan SET title = ?, price = ?, monthly_price = ?, yearly_price = ?, recurring_enabled = ?, default_billing_interval = ?, popular = ?, price_strike = ?, credits = ?, expiry_days = ?, max_characters = ? WHERE id = ?`,
       [
         title,
-        price ?? monthly_price,
-        monthly_price ?? price,
-        yearly_price ?? Number(monthly_price ?? price ?? 0) * 12,
-        recurring_enabled ? 1 : 0,
-        default_billing_interval || "monthly",
+        price,
+        price,
+        price,
+        0,
+        "one_time",
         popular ? 1 : 0,
         price_strike || null,
         credits,
-        expiry_days,
+        0,
         max_characters,
         id,
       ],

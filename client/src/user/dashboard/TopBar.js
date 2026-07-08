@@ -18,11 +18,9 @@ import {
   ChevronRight as ChevronRightIcon,
   TokenOutlined,
   WorkspacePremiumOutlined,
-  WarningAmberOutlined,
 } from "@mui/icons-material";
 import ProfileComp from "./ProfileComp";
 import { UserContext } from "../../context/UserContext";
-import moment from "moment";
 
 const TopBar = ({
   lang,
@@ -49,12 +47,6 @@ const TopBar = ({
 
   const credits = Number(userData?.credits || 0);
   const maxCredits = Number(plan?.credits || 0);
-  const expiryDate = userData?.plan_ending
-    ? moment(userData.plan_ending)
-    : null;
-  const daysLeft = expiryDate ? expiryDate.diff(moment(), "days") : null;
-  const isExpired = daysLeft !== null && daysLeft < 0;
-  const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 5;
   const isLowCredits = maxCredits > 0 && (credits / maxCredits) * 100 <= 20;
 
   const pageLabel = selectedMenu
@@ -163,47 +155,6 @@ const TopBar = ({
 
           {/* ── Right Side ── */}
           <Stack direction="row" alignItems="center" spacing={1.5}>
-            {/* Expiry warning badge */}
-            {(isExpired || isExpiringSoon) && (
-              <Tooltip
-                title={
-                  isExpired
-                    ? lang?.planExpired || "Your plan has expired"
-                    : `${lang?.planExpires || "Plan expires"} ${expiryDate.fromNow()}`
-                }
-              >
-                <Chip
-                  icon={
-                    <WarningAmberOutlined
-                      sx={{ fontSize: "13px !important" }}
-                    />
-                  }
-                  label={
-                    isExpired ? lang?.expired || "Expired" : `${daysLeft}d left`
-                  }
-                  size="small"
-                  sx={{
-                    height: 26,
-                    fontSize: "0.7rem",
-                    fontWeight: 700,
-                    cursor: "default",
-                    bgcolor: isExpired
-                      ? alpha(theme.palette.error.main, 0.1)
-                      : alpha(theme.palette.warning.main, 0.1),
-                    color: isExpired ? "error.main" : "warning.main",
-                    border: `1px solid ${
-                      isExpired
-                        ? alpha(theme.palette.error.main, 0.25)
-                        : alpha(theme.palette.warning.main, 0.25)
-                    }`,
-                    "& .MuiChip-icon": {
-                      color: isExpired ? "error.main" : "warning.main",
-                    },
-                  }}
-                />
-              </Tooltip>
-            )}
-
             {/* Plan badge */}
             {plan?.title && (
               <Tooltip title={`${plan.title} plan`}>

@@ -10,11 +10,11 @@ import { GlobalContext } from "../../context/GlobalContext";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 
 // ─────────────────────────────────────────────
-const FooterComp = () => {
+const FooterComp = ({ web: webProp }) => {
   const history = useHistory();
   const { config, isDark } = useCustomTheme();
   const { hitAxios } = React.useContext(GlobalContext);
-  const [web, setWeb] = React.useState({});
+  const [web, setWeb] = React.useState(webProp || {});
   const { lang } = React.useContext(TranslateContext);
 
   // ── Moved INSIDE component so lang is available ──
@@ -54,14 +54,18 @@ const FooterComp = () => {
       post: false,
       admin: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       setWeb(res.data.data);
     }
   }
 
   React.useEffect(() => {
+    if (webProp) {
+      setWeb(webProp);
+      return;
+    }
     getWebPublic();
-  }, []);
+  }, [webProp]);
 
   const bgPaper = isDark
     ? config.background_paper_dark

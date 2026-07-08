@@ -90,7 +90,7 @@ const SiteSettings = ({ lang }) => {
     youtube_tutorial_url: "",
     currency_symbol: "$",
     currency_code: "USD",
-    currency_exchange_rate: "83.0000",
+    currency_exchange_rate: "1",
     referral_enabled: true,
     referral_signup_credits: 0,
     referral_referrer_credits: 0,
@@ -128,7 +128,7 @@ const SiteSettings = ({ lang }) => {
           youtube_tutorial_url: d.youtube_tutorial_url || "",
           currency_symbol: d.currency_symbol || "$",
           currency_code: d.currency_code || "USD",
-          currency_exchange_rate: d.currency_exchange_rate || "83.0000",
+          currency_exchange_rate: "1",
           referral_enabled: d.referral_enabled !== 0,
           referral_signup_credits: d.referral_signup_credits || 0,
           referral_referrer_credits: d.referral_referrer_credits || 0,
@@ -167,15 +167,6 @@ const SiteSettings = ({ lang }) => {
   };
 
   const handleSave = async () => {
-    const rate = parseFloat(form.currency_exchange_rate);
-    if (!rate || rate <= 0) {
-      window.alert(
-        lang?.invalidExchangeRate ||
-          "Please enter a valid INR exchange rate (e.g. 83.50)",
-      );
-      return;
-    }
-
     setSaving(true);
     const res = await hitAxios({
       path: "/api/web/save_web_public",
@@ -185,7 +176,7 @@ const SiteSettings = ({ lang }) => {
         ...form,
         currency_symbol: "$",
         currency_code: "USD",
-        currency_exchange_rate: rate,
+        currency_exchange_rate: 1,
         custom_homepage_enabled: form.custom_homepage_enabled ? 1 : 0,
         referral_enabled: form.referral_enabled ? 1 : 0,
       },
@@ -195,13 +186,10 @@ const SiteSettings = ({ lang }) => {
     if (res?.data?.success) {
       setForm((prev) => ({
         ...prev,
-        currency_exchange_rate: String(rate),
+        currency_exchange_rate: "1",
       }));
     }
   };
-
-  const inrRate = parseFloat(form.currency_exchange_rate) || 0;
-  const previewAmounts = [1, 10, 49, 99];
 
   const mediaUrl = (name) => (name ? `/media/${name}` : null);
 
@@ -594,15 +582,15 @@ const SiteSettings = ({ lang }) => {
 
         {/* ── CURRENCY ── */}
         <Section
-          title={lang?.currencyExchangeRate || "Currency & Exchange Rate"}
+          title={lang?.currencySettings || "Currency Settings"}
           icon={CurrencyExchangeOutlined}
-          chip="USD / INR"
+          chip="USD"
         >
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Typography variant="body2" color="text.secondary">
-                {lang?.dualCurrencyInfo ||
-                  "All plan and credit prices are stored in USD. Indian visitors automatically see prices converted to INR using the rate you set below."}
+                {lang?.usdOnlyCurrencyInfo ||
+                  "All plan and credit package prices are stored, displayed, and charged in USD."}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -622,90 +610,14 @@ const SiteSettings = ({ lang }) => {
               <TextField
                 fullWidth
                 size="small"
-                label={lang?.indiaCurrency || "India Display Currency"}
-                value="INR (₹)"
+                label={lang?.displayCurrency || "Display Currency"}
+                value="USD ($)"
                 InputProps={{ readOnly: true }}
                 helperText={
-                  lang?.indiaCurrencyHint ||
-                  "Shown automatically to users from India"
+                  lang?.displayCurrencyHint ||
+                  "Shown to all users on pricing, checkout, and credit pages"
                 }
               />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                size="small"
-                required
-                label={lang?.usdToInrRate || "USD to INR Exchange Rate"}
-                placeholder="83.50"
-                type="number"
-                inputProps={{ min: 0.01, step: 0.01 }}
-                value={form.currency_exchange_rate}
-                onChange={(e) => set("currency_exchange_rate", e.target.value)}
-                helperText={
-                  lang?.usdToInrRateHint ||
-                  "Set how many rupees equal 1 US dollar"
-                }
-                InputProps={{
-                  startAdornment: (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ mr: 1, fontWeight: 700, whiteSpace: "nowrap" }}
-                    >
-                      1 USD =
-                    </Typography>
-                  ),
-                  endAdornment: (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ ml: 1, fontWeight: 700 }}
-                    >
-                      INR
-                    </Typography>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Box
-                sx={{
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: 2,
-                  p: 2,
-                  height: "100%",
-                  bgcolor: alpha(theme.palette.primary.main, 0.03),
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontWeight={700}
-                  letterSpacing={1}
-                  display="block"
-                  mb={1}
-                >
-                  {lang?.conversionPreview || "CONVERSION PREVIEW"}
-                </Typography>
-                <Stack spacing={0.8}>
-                  {previewAmounts.map((usd) => (
-                    <Stack
-                      key={usd}
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="center"
-                    >
-                      <Typography variant="body2" color="text.secondary">
-                        ${usd} USD
-                      </Typography>
-                      <Typography variant="body2" fontWeight={700}>
-                        ₹{Math.round(usd * inrRate).toLocaleString("en-IN")} INR
-                      </Typography>
-                    </Stack>
-                  ))}
-                </Stack>
-              </Box>
             </Grid>
           </Grid>
         </Section>

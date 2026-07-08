@@ -17,6 +17,9 @@ export const GlobalProvider = ({ children }) => {
   const API_BASE_URL = process.env.REACT_APP_BASE_URL;
   const TOKEN_PREFIX = process.env.REACT_APP_TOKEN;
   const history = useHistory();
+  const publicWebCacheRef = React.useRef(null);
+  const publicWebPromiseRef = React.useRef(null);
+  const activeLoadingRequestsRef = React.useRef(0);
 
   const [data, setData] = useState({
     loading: false,
@@ -49,7 +52,25 @@ export const GlobalProvider = ({ children }) => {
 
   // Set loading state
   const setLoading = useCallback((loading) => {
+    if (!loading) {
+      activeLoadingRequestsRef.current = 0;
+    }
     setData((prev) => ({ ...prev, loading }));
+  }, []);
+
+  const beginGlobalLoading = useCallback(() => {
+    activeLoadingRequestsRef.current += 1;
+    setData((prev) => (prev.loading ? prev : { ...prev, loading: true }));
+  }, []);
+
+  const endGlobalLoading = useCallback(() => {
+    activeLoadingRequestsRef.current = Math.max(
+      0,
+      activeLoadingRequestsRef.current - 1,
+    );
+    if (activeLoadingRequestsRef.current === 0) {
+      setData((prev) => (prev.loading ? { ...prev, loading: false } : prev));
+    }
   }, []);
 
   // Handle logout
@@ -83,12 +104,22 @@ export const GlobalProvider = ({ children }) => {
       headers: customHeaders = {},
       onUploadProgress, // Add this
     }) => {
+      const isPublicWebRequest = !post && path === "/api/web/get_web_public";
+      if (isPublicWebRequest && publicWebCacheRef.current) {
+        return publicWebCacheRef.current;
+      }
+      if (isPublicWebRequest && publicWebPromiseRef.current) {
+        return publicWebPromiseRef.current;
+      }
+
       const token = localStorage.getItem(
         admin ? `${TOKEN_PREFIX}_admin` : `${TOKEN_PREFIX}_user`,
       );
 
-      if (showLoading) {
-        setLoading(true);
+      const shouldShowLoading = showLoading && !isPublicWebRequest;
+
+      if (shouldShowLoading) {
+        beginGlobalLoading();
       }
 
       try {
@@ -108,7 +139,7 @@ export const GlobalProvider = ({ children }) => {
           method: httpMethod,
           url: `${API_BASE_URL}${path}`,
           headers,
-          // timeout,
+          timeout,
           onUploadProgress, // Add this
         };
 
@@ -116,10 +147,32 @@ export const GlobalProvider = ({ children }) => {
           config.data = obj;
         }
 
-        const response = await axios(config);
+        const requestPromise = axios(config);
+        if (isPublicWebRequest) {
+          publicWebPromiseRef.current = requestPromise.catch((error) => ({
+            success: false,
+            data: {
+              success: false,
+              msg: error?.message || "Request failed",
+              error: error?.message || "Request failed",
+            },
+          }));
+        }
 
-        if (showLoading) {
-          setLoading(false);
+        const response = await requestPromise;
+
+        if (isPublicWebRequest && response?.data?.success) {
+          publicWebCacheRef.current = response;
+        }
+        if (post && path === "/api/web/save_web_public" && response?.data?.success) {
+          publicWebCacheRef.current = null;
+        }
+        if (isPublicWebRequest) {
+          publicWebPromiseRef.current = null;
+        }
+
+        if (shouldShowLoading) {
+          endGlobalLoading();
         }
 
         if (response?.data?.logout) {
@@ -131,7 +184,7 @@ export const GlobalProvider = ({ children }) => {
         }
 
         if (showSnackbar) {
-          if (!response?.data?.success && response.data.msg) {
+          if (!response?.data?.success && response?.data?.msg) {
             showSnack(response.data.msg, false);
           } else if (response?.data?.success && response.data.msg) {
             showSnack(response.data.msg, true);
@@ -142,29 +195,45 @@ export const GlobalProvider = ({ children }) => {
       } catch (error) {
         console.error("API Error:", error);
 
-        if (showLoading) {
-          setLoading(false);
+        if (isPublicWebRequest) {
+          publicWebPromiseRef.current = null;
+        }
+
+        if (shouldShowLoading) {
+          endGlobalLoading();
         }
 
         if (error.code === "ECONNABORTED") {
+          const data = {
+            success: false,
+            msg: "Request timed out. Please try again.",
+            error: "Request timed out",
+          };
           if (showSnackbar) {
-            showSnack("Request timed out. Please try again.", false);
+            showSnack(data.msg, false);
           }
-          return { success: false, error: "Request timed out" };
+          return { success: false, error: data.error, data };
         } else if (error.message?.includes("Network Error")) {
+          const data = {
+            success: false,
+            msg: "Network error. Please check your internet connection.",
+            error: "Network error",
+          };
           if (showSnackbar) {
-            showSnack(
-              "Network error. Please check your internet connection.",
-              false,
-            );
+            showSnack(data.msg, false);
           }
-          return { success: false, error: "Network error" };
+          return { success: false, error: data.error, data };
         } else if (error.response?.status === 401) {
           handleLogout(admin);
+          const data = {
+            success: false,
+            msg: "Session expired. Please login again.",
+            logout: true,
+          };
           if (showSnackbar) {
-            showSnack("Session expired. Please login again.", false);
+            showSnack(data.msg, false);
           }
-          return { success: false, logout: true };
+          return { success: false, logout: true, data };
         }
 
         const errorMessage =
@@ -177,11 +246,23 @@ export const GlobalProvider = ({ children }) => {
         return {
           success: false,
           error: errorMessage,
+          data: {
+            success: false,
+            msg: errorMessage,
+            error: errorMessage,
+          },
           response: error.response,
         };
       }
     },
-    [API_BASE_URL, TOKEN_PREFIX, handleLogout, setLoading, showSnack],
+    [
+      API_BASE_URL,
+      TOKEN_PREFIX,
+      beginGlobalLoading,
+      endGlobalLoading,
+      handleLogout,
+      showSnack,
+    ],
   );
 
   const themeAPI = React.useMemo(

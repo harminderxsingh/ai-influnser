@@ -100,9 +100,7 @@ const OfflineCheckout = ({ plan, currency, html, paying, setPaying, lang }) => {
               {lang?.amountToPay || "Amount to Pay"}
             </Typography>
             <Typography variant="body2" fontWeight={700} color="primary">
-              {currency.symbol}
-              {(parseFloat(plan.price) * currency.rate).toFixed(2)}{" "}
-              {currency.code.toUpperCase()}
+              ${parseFloat(plan.price || 0).toFixed(2)} USD
             </Typography>
           </Box>
 

@@ -16,6 +16,7 @@ import {
   Alert,
   alpha,
   useTheme,
+  MenuItem,
 } from "@mui/material";
 import {
   AddCard,
@@ -354,6 +355,28 @@ const PaymentGateway = ({ lang }) => {
                 />
                 <Divider />
                 <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label={lang?.paypalMode || "Mode"}
+                  helperText={
+                    lang?.paypalModeHint ||
+                    "Use sandbox credentials for testing and live credentials for production"
+                  }
+                  value={state?.paypal_mode || "live"}
+                  onChange={(e) =>
+                    set(
+                      "paypal_mode",
+                      e.target.value === "live" ? "live" : "sandbox",
+                    )
+                  }
+                >
+                  <MenuItem value="sandbox">
+                    {lang?.sandbox || "Sandbox"}
+                  </MenuItem>
+                  <MenuItem value="live">{lang?.live || "Live"}</MenuItem>
+                </TextField>
+                <TextField
                   fullWidth
                   size="small"
                   label={lang?.paypalClientId || "Client ID"}
@@ -408,6 +431,62 @@ const PaymentGateway = ({ lang }) => {
                   value={state?.pay_paystack_key}
                   onChange={set}
                   name="pay_paystack_key"
+                />
+              </Stack>
+            </SectionCard>
+
+            {/* PAYU */}
+            <SectionCard
+              icon={AccountBalanceWalletOutlined}
+              title={lang?.payu || "PayU"}
+            >
+              <Stack spacing={2}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={state?.payu_active === 1}
+                      onChange={(e) =>
+                        set("payu_active", e.target.checked ? 1 : 0)
+                      }
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" fontWeight={500}>
+                      {lang?.enableGateway || "Enable Gateway"}
+                    </Typography>
+                  }
+                />
+                <Divider />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label={lang?.payuMerchantKey || "Merchant Key"}
+                  placeholder="PayU merchant key"
+                  value={state?.payu_key || ""}
+                  onChange={(e) => set("payu_key", e.target.value)}
+                />
+                <MaskedField
+                  label={lang?.payuSalt || "Salt"}
+                  placeholder="PayU salt"
+                  value={state?.payu_salt}
+                  onChange={set}
+                  name="payu_salt"
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label={lang?.payuMode || "Mode"}
+                  helperText={
+                    lang?.payuModeHint || "Use test for sandbox, live for production"
+                  }
+                  value={state?.payu_mode || "test"}
+                  onChange={(e) =>
+                    set(
+                      "payu_mode",
+                      e.target.value === "live" ? "live" : "test",
+                    )
+                  }
                 />
               </Stack>
             </SectionCard>

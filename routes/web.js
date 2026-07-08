@@ -17,6 +17,16 @@ const {
   getTiktokCallbackUri,
 } = require("../utils/tiktok.js");
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // update app
 router.post("/update_app", async (req, res) => {
   try {
@@ -322,7 +332,7 @@ router.post("/update_credit_set", adminValidator, async (req, res) => {
 // ── GET web_public ──
 router.get("/get_web_public", async (req, res) => {
   try {
-    const [data] = await query(`SELECT * FROM web_public`, []);
+    const [data] = await query(`SELECT * FROM web_public LIMIT 1`, []);
     res.json({ data: data || {}, success: true });
   } catch (err) {
     res.json({ success: false, msg: "Something went wrong", err });
@@ -414,14 +424,6 @@ router.post("/save_web_public", adminValidator, async (req, res) => {
       about_us_html,
     } = req.body;
 
-    const inrRate = parseFloat(currency_exchange_rate);
-    if (!inrRate || inrRate <= 0) {
-      return res.json({
-        success: false,
-        msg: "Please enter a valid USD to INR exchange rate",
-      });
-    }
-
     const [existing] = await query(`SELECT id FROM web_public`, []);
 
     if (existing) {
@@ -454,7 +456,7 @@ router.post("/save_web_public", adminValidator, async (req, res) => {
           youtube_tutorial_url,
           "$",
           "USD",
-          inrRate,
+          1,
           referral_enabled ? 1 : 0,
           referral_signup_credits || 0,
           referral_referrer_credits || 0,
@@ -494,7 +496,7 @@ router.post("/save_web_public", adminValidator, async (req, res) => {
           youtube_tutorial_url,
           "$",
           "USD",
-          inrRate,
+          1,
           referral_enabled ? 1 : 0,
           referral_signup_credits || 0,
           referral_referrer_credits || 0,
@@ -631,7 +633,7 @@ router.post("/verify_license", async (req, res) => {
   try {
     const { licenseKey, name, email, mobile } = req.body;
 
-    const hit = await fetch(
+    const hit = await fetchWithTimeout(
       "https://envato-buyer.oneoftheprojects.com/api/admin/check_license_external?lang=English",
       {
         method: "POST",
@@ -647,6 +649,7 @@ router.post("/verify_license", async (req, res) => {
           mobile: mobile,
         }),
       },
+      15000,
     );
 
     const ress = await hit.json();

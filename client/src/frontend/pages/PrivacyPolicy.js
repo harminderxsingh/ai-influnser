@@ -30,21 +30,27 @@ const PrivacyPolicy = () => {
     : config.text_secondary_light;
   const borderColor = isDark ? config.border_dark : config.border_light;
 
-  async function getPage() {
-    const res = await hitAxios({
-      path: "/api/web/get_pages_html",
-      post: false,
-      admin: false,
-    });
-    if (res.data.success) {
-      setPage(res?.data?.data?.privacy_policy_html);
-    }
-    setLoading(false);
-  }
-
   React.useEffect(() => {
-    getPage();
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await hitAxios({
+          path: "/api/web/get_pages_html",
+          post: false,
+          admin: false,
+          showLoading: false,
+        });
+        if (!cancelled && res?.data?.success) {
+          setPage(res?.data?.data?.privacy_policy_html);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hitAxios]);
 
   return (
     <Box

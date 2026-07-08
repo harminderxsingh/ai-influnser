@@ -160,8 +160,9 @@ const Dash = ({ lang }) => {
         path: "/api/admin/get_dashboard",
         post: false,
         admin: true,
+        showLoading: false,
       });
-      if (res.data.success) setData(res.data.data);
+      if (res?.data?.success) setData(res.data.data);
     } finally {
       setLoading(false);
     }

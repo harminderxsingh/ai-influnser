@@ -131,24 +131,32 @@ const SocialPublishing = ({ lang }) => {
   // ── Fetch ─────────────────────────────────────────────
   async function fetchMedias() {
     setLoadingMedias(true);
-    const res = await hitAxios({
-      path: "/api/social-publishing/get_medias",
-      post: false,
-      admin: false,
-    });
-    if (res?.data?.success) setMedias(res.data.data);
-    setLoadingMedias(false);
+    try {
+      const res = await hitAxios({
+        path: "/api/social-publishing/get_medias",
+        post: false,
+        admin: false,
+        showLoading: false,
+      });
+      if (res?.data?.success) setMedias(res.data.data);
+    } finally {
+      setLoadingMedias(false);
+    }
   }
 
   async function fetchAccounts() {
     setLoadingAccounts(true);
-    const res = await hitAxios({
-      path: "/api/social-publishing/accounts",
-      post: false,
-      admin: false,
-    });
-    if (res?.data?.success) setAccounts(res.data.accounts);
-    setLoadingAccounts(false);
+    try {
+      const res = await hitAxios({
+        path: "/api/social-publishing/accounts",
+        post: false,
+        admin: false,
+        showLoading: false,
+      });
+      if (res?.data?.success) setAccounts(res.data.accounts);
+    } finally {
+      setLoadingAccounts(false);
+    }
   }
 
   async function fetchMyPosts() {
@@ -156,6 +164,7 @@ const SocialPublishing = ({ lang }) => {
       path: "/api/social-publishing/my_posts",
       post: false,
       admin: false,
+      showLoading: false,
     });
     if (res?.data?.success) setMyPosts(res.data.posts);
   }
@@ -214,6 +223,7 @@ const SocialPublishing = ({ lang }) => {
       path: "/api/social-publishing/create_post",
       post: true,
       admin: false,
+      showLoading: false,
       obj: {
         platform: selectedAccount.platform,
         account_id: selectedAccount.id,

@@ -23,9 +23,9 @@ export const UserProvider = ({ children }) => {
       path: "/api/user/get_me",
       post: false,
       admin: false,
-      loading: false,
+      showLoading: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       setUserData(res.data.data);
     }
   }

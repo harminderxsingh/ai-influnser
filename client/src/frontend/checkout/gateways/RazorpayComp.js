@@ -20,8 +20,6 @@ function loadRazorpayScript() {
 const RazorpayComp = ({
   plan,
   productType = "plan",
-  billingInterval = "monthly",
-  country,
   paying,
   setPaying,
 }) => {
@@ -48,8 +46,8 @@ const RazorpayComp = ({
       post: true,
       obj: withCountry(
         productType === "credit_package"
-          ? { product_type: productType, package_id: plan.id, country }
-          : { plan_id: plan.id, billing_interval: billingInterval, country },
+          ? { product_type: productType, package_id: plan.id }
+          : { plan_id: plan.id },
       ),
     });
 
@@ -87,7 +85,7 @@ const RazorpayComp = ({
             razorpay_signature: response.razorpay_signature,
             ...(productType === "credit_package"
               ? { product_type: productType, package_id: plan.id }
-              : { plan_id: plan.id, billing_interval: billingInterval }),
+              : { plan_id: plan.id }),
           },
         });
 

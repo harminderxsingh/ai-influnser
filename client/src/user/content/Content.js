@@ -15,8 +15,9 @@ const Content = ({ lang }) => {
       path: "/api/content/get_all",
       post: false,
       admin: false,
+      showLoading: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       setContent(res.data.data);
     }
   }
@@ -26,8 +27,9 @@ const Content = ({ lang }) => {
       path: "/api/inf/get_models",
       post: false,
       admin: false,
+      showLoading: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       setInf(res.data.data);
     }
   }

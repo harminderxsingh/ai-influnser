@@ -8,8 +8,6 @@ import { withCountry } from "../../../utils/currency";
 const PaystackComp = ({
   plan,
   productType = "plan",
-  billingInterval = "monthly",
-  country,
   paying,
   setPaying,
 }) => {
@@ -26,8 +24,8 @@ const PaystackComp = ({
       post: true,
       obj: withCountry(
         productType === "credit_package"
-          ? { product_type: productType, package_id: plan.id, country }
-          : { plan_id: plan.id, billing_interval: billingInterval, country },
+          ? { product_type: productType, package_id: plan.id }
+          : { plan_id: plan.id },
       ),
     });
     if (res.data.success) {

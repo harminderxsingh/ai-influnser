@@ -15,6 +15,7 @@ const TalkingVideo = ({ lang }) => {
       path: "/api/inf/get_models",
       post: false,
       admin: false,
+      showLoading: false,
     });
     if (res?.data?.success) setInf(res.data.data || []);
   }
@@ -24,6 +25,7 @@ const TalkingVideo = ({ lang }) => {
       path: "/api/talking/get_all",
       post: false,
       admin: false,
+      showLoading: false,
     });
     if (res?.data?.success) setVideos(res.data.data || []);
   }

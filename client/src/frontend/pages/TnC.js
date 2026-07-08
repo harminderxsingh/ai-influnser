@@ -37,6 +37,7 @@ const TnC = () => {
         path: "/api/web/get_pages_html",
         post: false,
         admin: false,
+        showLoading: false,
       });
       if (cancelled) return;
       if (res?.data?.success) {

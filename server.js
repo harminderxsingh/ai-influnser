@@ -58,6 +58,7 @@ app.use("/api/content", require("./routes/content"));
 app.use("/api/support", require("./routes/support"));
 app.use("/api/ai", require("./routes/ai"));
 app.use("/api/payment", require("./routes/payment"));
+app.use("/api/launchpad", require("./routes/launchpad"));
 app.use("/api/blogs", require("./routes/blogs"));
 app.use("/api/insta", require("./routes/insta"));
 app.use("/api/tiktok", require("./routes/tiktok"));

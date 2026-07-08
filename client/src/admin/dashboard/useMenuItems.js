@@ -54,6 +54,7 @@ export const useMenuItems = () => {
           id: "payment-gateway",
           text: lang?.paymentGateway || "Payment Gateways",
         },
+        { id: "launchpad", text: lang?.launchpad || "Launchpad JV" },
         { id: "orders", text: lang?.orders || "Orders" },
       ],
     },

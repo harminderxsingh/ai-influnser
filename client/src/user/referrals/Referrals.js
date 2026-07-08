@@ -30,9 +30,9 @@ const Referrals = ({ lang }) => {
       path: "/api/user/referral_info",
       post: false,
       admin: false,
-      loading: false,
+      showLoading: false,
     });
-    if (res.data.success) setData(res.data.data);
+    if (res?.data?.success) setData(res.data.data);
   }, [hitAxios]);
 
   React.useEffect(() => {

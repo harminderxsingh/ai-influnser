@@ -32,23 +32,29 @@ const SocialLogin = ({ lang }) => {
       path: "/api/web/get_social_login_admin",
       post: false,
       admin: true,
+      showLoading: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       setSData(res.data.data);
     }
   }
 
   async function handleUpdate() {
     setLoading(true);
-    const res = await hitAxios({
-      path: "/api/web/update_social_login_data",
-      post: true,
-      admin: true,
-      obj: sData,
-    });
-    if (res.data.success) {
-      setSData(res.data.data);
-      getSocialLoginData();
+    try {
+      const res = await hitAxios({
+        path: "/api/web/update_social_login_data",
+        post: true,
+        admin: true,
+        obj: sData,
+        showLoading: false,
+      });
+      if (res?.data?.success) {
+        setSData(res.data.data);
+        getSocialLoginData();
+      }
+    } finally {
+      setLoading(false);
     }
   }
 

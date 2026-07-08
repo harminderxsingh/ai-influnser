@@ -265,8 +265,9 @@ const BlogComp = () => {
       path: "/api/blogs/get_all",
       post: false,
       admin: false,
+      showLoading: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       setBlogs(res.data.data);
     }
   }

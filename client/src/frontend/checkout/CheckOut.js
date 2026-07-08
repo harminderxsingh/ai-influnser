@@ -2,7 +2,7 @@ import React from "react";
 import { TranslateContext } from "../../context/TranslateContext";
 import { GlobalContext } from "../../context/GlobalContext";
 import { useCurrency } from "../../context/CurrencyContext";
-import { useLocation, useParams, useRouteMatch } from "react-router-dom";
+import { useParams, useRouteMatch } from "react-router-dom";
 import {
   Box,
   Chip,
@@ -10,6 +10,7 @@ import {
   Divider,
   Stack,
   Typography,
+  Alert,
   alpha,
   useTheme,
 } from "@mui/material";
@@ -21,6 +22,7 @@ import StripeComp from "./gateways/StripeComp";
 import PayPalComp from "./gateways/PayPalComp";
 import RazorpayComp from "./gateways/RazorpayComp";
 import PaystackComp from "./gateways/PaystackComp";
+import PayUComp from "./gateways/PayUComp";
 import MercadoPagoComp from "./gateways/MercadoPagoComp";
 import Free from "./gateways/Free";
 import OfflineCheckout from "./gateways/OfflineCheckout"; // ← new
@@ -31,6 +33,7 @@ const GATEWAY_COMPONENTS = {
   paypal: PayPalComp,
   razorpay: RazorpayComp,
   paystack: PaystackComp,
+  payu: PayUComp,
   mercadopago: MercadoPagoComp,
   free: Free,
 };
@@ -38,15 +41,10 @@ const GATEWAY_COMPONENTS = {
 const CheckOut = () => {
   const { lang } = React.useContext(TranslateContext);
   const { hitAxios } = React.useContext(GlobalContext);
-  const { currency, formatPrice, convertPrice, country } = useCurrency();
+  const { currency, convertPrice } = useCurrency();
   const { id } = useParams();
-  const location = useLocation();
   const creditMatch = useRouteMatch("/checkout/credits/:id");
   const productType = creditMatch ? "credit_package" : "plan";
-  const initialBilling = new URLSearchParams(location.search).get("billing");
-  const [billingInterval, setBillingInterval] = React.useState(
-    initialBilling === "yearly" ? "yearly" : "monthly",
-  );
   const theme = useTheme();
 
   const hitAxiosRef = React.useRef(hitAxios);
@@ -57,6 +55,8 @@ const CheckOut = () => {
   const [offlineActive, setOfflineActive] = React.useState(false); // ← new
   const [paying, setPaying] = React.useState("");
   const [done, setDone] = React.useState(false);
+  const [loadingCheckout, setLoadingCheckout] = React.useState(true);
+  const [checkoutError, setCheckoutError] = React.useState("");
 
   // ── fetch once when id is available ──────────────────────────────────────
   React.useEffect(() => {
@@ -64,40 +64,53 @@ const CheckOut = () => {
     setDone(true);
 
     (async () => {
-      const [planRes, gwRes, offlineRes] = await Promise.all([
-        hitAxiosRef.current({
-          path:
-            productType === "credit_package"
-              ? "/api/credit-package/get_by_id"
-              : "/api/plan/get_plan_by_id",
-          admin: false,
-          post: true,
-          obj: { id },
-        }),
-        hitAxiosRef.current({
-          path: "/api/payment/active-gateways",
-          admin: false,
-          post: false,
-        }),
-        hitAxiosRef.current({
-          // ← new
-          path: "/api/payment/offline-details",
-          admin: false,
-          post: false,
-        }),
-      ]);
+      setLoadingCheckout(true);
+      setCheckoutError("");
+      try {
+        const [planRes, gwRes, offlineRes] = await Promise.all([
+          hitAxiosRef.current({
+            path:
+              productType === "credit_package"
+                ? "/api/credit-package/get_by_id"
+                : "/api/plan/get_plan_by_id",
+            admin: false,
+            post: true,
+            obj: { id },
+            showLoading: false,
+          }),
+          hitAxiosRef.current({
+            path: "/api/payment/active-gateways",
+            admin: false,
+            post: false,
+            showLoading: false,
+          }),
+          hitAxiosRef.current({
+            // ← new
+            path: "/api/payment/offline-details",
+            admin: false,
+            post: false,
+            showLoading: false,
+          }),
+        ]);
 
-      if (planRes?.data?.success) {
-        setPlan({ ...planRes.data.data, product_type: productType });
-      }
-      if (gwRes?.data?.success) setGateways(gwRes.data.data);
-      if (offlineRes?.data?.success) {
-        // ← new
-        setOfflineHtml(offlineRes.data.html || "");
-        setOfflineActive(!!offlineRes.data.active);
+        if (planRes?.data?.success) {
+          setPlan({ ...planRes.data.data, product_type: productType });
+        } else {
+          setCheckoutError(
+            planRes?.data?.msg || lang?.checkoutLoadFailed || "Unable to load checkout details.",
+          );
+        }
+        if (gwRes?.data?.success) setGateways(gwRes.data.data);
+        if (offlineRes?.data?.success) {
+          // ← new
+          setOfflineHtml(offlineRes.data.html || "");
+          setOfflineActive(!!offlineRes.data.active);
+        }
+      } finally {
+        setLoadingCheckout(false);
       }
     })();
-  }, [id, done, productType]);
+  }, [id, done, productType, lang]);
 
   // ── only show gateways that are active AND have a component ready ─────────
   const activeGateways = Object.entries(gateways).filter(
@@ -105,12 +118,7 @@ const CheckOut = () => {
   );
 
   // ── currency conversion ───────────────────────────────────────────────────
-  const selectedPrice =
-    productType === "plan"
-      ? billingInterval === "yearly"
-        ? plan?.yearly_price || plan?.price
-        : plan?.monthly_price || plan?.price
-      : plan?.price;
+  const selectedPrice = plan?.price;
 
   const localPrice = plan ? convertPrice(selectedPrice || 0) : 0;
 
@@ -143,8 +151,19 @@ const CheckOut = () => {
           p: { xs: 2, sm: 3, md: 4 },
         }}
       >
-        {!plan?.id ? (
-          <Box />
+        {loadingCheckout ? (
+          <Stack alignItems="center" spacing={2} sx={{ py: 8 }}>
+            <CircularProgress size={28} />
+            <Typography variant="body2" color="text.secondary">
+              {lang?.loadingCheckout || "Loading checkout..."}
+            </Typography>
+          </Stack>
+        ) : !plan?.id ? (
+          <Alert severity="error" sx={{ width: "100%", maxWidth: 480 }}>
+            {checkoutError ||
+              lang?.checkoutLoadFailed ||
+              "Unable to load checkout details."}
+          </Alert>
         ) : (
           <Box
             sx={{
@@ -226,32 +245,8 @@ const CheckOut = () => {
 
                   {/* currency info */}
                   <Typography variant="caption" color="text.disabled">
-                    {lang?.priceIn || "Price in"} {currency.code.toUpperCase()}
-                    {currency.rate !== 1 &&
-                      ` · 1 USD = ${currency.rate} ${currency.code.toUpperCase()}`}
+                    {lang?.priceIn || "Price in"} USD
                   </Typography>
-
-                  {productType === "plan" && (
-                    <Stack direction="row" spacing={1}>
-                      {[
-                        { key: "monthly", label: lang?.monthly || "Monthly" },
-                        { key: "yearly", label: lang?.yearly || "Yearly" },
-                      ].map((item) => (
-                        <Chip
-                          key={item.key}
-                          label={item.label}
-                          color={
-                            billingInterval === item.key ? "primary" : "default"
-                          }
-                          variant={
-                            billingInterval === item.key ? "filled" : "outlined"
-                          }
-                          onClick={() => setBillingInterval(item.key)}
-                          sx={{ fontWeight: 700 }}
-                        />
-                      ))}
-                    </Stack>
-                  )}
 
                   <Divider />
 
@@ -274,7 +269,7 @@ const CheckOut = () => {
                           },
                           {
                             label: lang?.validity || "Validity",
-                            value: `${plan.expiry_days} ${lang?.days || "days"}`,
+                            value: lang?.lifetime || "Lifetime",
                           },
                         ]),
                   ].map(({ label, value }) => (
@@ -332,10 +327,8 @@ const CheckOut = () => {
                             key={key}
                             plan={plan}
                             productType={productType}
-                            billingInterval={billingInterval}
                             gwData={gwData}
                             currency={currency}
-                            country={country}
                             paying={paying}
                             setPaying={setPaying}
                           />

@@ -76,6 +76,7 @@ const WebTranslation = ({ lang }) => {
         path: "/api/web/get-all-translation-name",
         post: false,
         admin: false,
+        showLoading: false,
       });
       if (res.data.success) setLangs(res.data.data);
     } catch {
@@ -92,6 +93,7 @@ const WebTranslation = ({ lang }) => {
         path: `/api/web/get-one-translation?code=${code}`,
         post: false,
         admin: false,
+        showLoading: false,
       });
       if (res.data.success) {
         const parsed = parseJson(res.data.data);
@@ -132,6 +134,7 @@ const WebTranslation = ({ lang }) => {
         post: true,
         admin: true,
         obj: { newcode: newCode },
+        showLoading: false,
       });
       if (res.data.success) {
         setAddOpen(false);
@@ -161,6 +164,7 @@ const WebTranslation = ({ lang }) => {
         post: true,
         admin: true,
         obj: { code },
+        showLoading: false,
       });
       if (res.data.success) {
         getLangs();
@@ -185,6 +189,7 @@ const WebTranslation = ({ lang }) => {
         post: true,
         admin: true,
         obj: { code: langCode, updatedjson: obj },
+        showLoading: false,
       });
       if (res.data.success) {
         setUnsaved(false);

@@ -22,6 +22,7 @@ import SocialLogin from "../socialLogin/SocialLogin";
 import UpdateApp from "../updateaApp/UpdateApp";
 import InstaConfig from "../instaConfig/InstaConfig";
 import TiktokConfig from "../tiktokConfig/TiktokConfig";
+import LaunchpadSettings from "../launchpad/LaunchpadSettings";
 
 const Content = ({ selectedMenu, web }) => {
   const { lang } = React.useContext(TranslateContext);
@@ -40,6 +41,7 @@ const Content = ({ selectedMenu, web }) => {
       {selectedMenu === "prompt-template" && <PromptTemplate lang={lang} />}
       {selectedMenu === "ai-provider" && <AiProviders lang={lang} />}
       {selectedMenu === "payment-gateway" && <PaymentGateway lang={lang} />}
+      {selectedMenu === "launchpad" && <LaunchpadSettings lang={lang} />}
       {selectedMenu === "email-settings" && <EmailSettings lang={lang} />}
       {selectedMenu === "email-templates" && <EmailTemplates lang={lang} />}
       {selectedMenu === "blogs" && <Blogs lang={lang} />}

@@ -14,28 +14,14 @@ import moment from "moment";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 
 // ─────────────────────────────────────────────
-const formatExpiry = (days, lang) => {
-  const d = parseInt(days);
-  const duration = moment.duration(d, "days");
-  if (d >= 365) {
-    const y = Math.round(duration.asYears());
-    return `${y} ${y > 1 ? lang?.pricing_years || "years" : lang?.pricing_year || "year"}`;
-  }
-  if (d >= 30) {
-    const m = Math.round(duration.asMonths());
-    return `${m} ${m > 1 ? lang?.pricing_months || "months" : lang?.pricing_month || "month"}`;
-  }
-  return `${d} ${d > 1 ? lang?.pricing_days || "days" : lang?.pricing_day || "day"}`;
-};
-
 const buildFeatures = (plan, lang) => [
   `${plan.credits} ${lang?.pricing_aiCredits || "AI Credits"}`,
   `${plan.max_characters} ${lang?.pricing_aiModels || "AI Models"}`,
-  `${lang?.pricing_accessFor || "Access for"} ${formatExpiry(plan.expiry_days, lang)}`,
+  lang?.pricing_lifetimeAccess || "Lifetime plan access",
 ];
 
 // ─────────────────────────────────────────────
-const PricingCard = ({ plan, history, billingInterval, formatPrice }) => {
+const PricingCard = ({ plan, history, formatPrice }) => {
   const { lang } = React.useContext(TranslateContext);
   const { config, isDark } = useCustomTheme();
 
@@ -63,13 +49,10 @@ const PricingCard = ({ plan, history, billingInterval, formatPrice }) => {
     : config.button.contained.color_light;
 
   const isPopular = plan.popular === 1;
-  const displayPrice =
-    billingInterval === "yearly"
-      ? plan.yearly_price || plan.price
-      : plan.monthly_price || plan.price;
+  const displayPrice = plan.price;
   const isFree = parseFloat(displayPrice) === 0;
   const features = buildFeatures(plan, lang);
-  const expiryLabel = formatExpiry(plan.expiry_days, lang);
+  const expiryLabel = lang?.lifetime || "Lifetime";
   const createdLabel = moment(plan.createdAt).format("MMM YYYY");
 
   return (
@@ -212,7 +195,7 @@ const PricingCard = ({ plan, history, billingInterval, formatPrice }) => {
                 mb: 0.5,
               }}
             >
-              / {billingInterval === "yearly" ? lang?.year || "year" : lang?.month || "month"}
+              {lang?.oneTime || "one-time"}
             </Typography>
           </>
         )}
@@ -374,7 +357,7 @@ const PricingCard = ({ plan, history, billingInterval, formatPrice }) => {
 
       {/* ── CTA ── */}
       <Box
-        onClick={() => history.push(`/checkout/${plan.id}?billing=${billingInterval}`)}
+        onClick={() => history.push(`/checkout/${plan.id}`)}
         component="a"
         sx={{
           width: "100%",
@@ -420,7 +403,6 @@ const PricingCard = ({ plan, history, billingInterval, formatPrice }) => {
 const Pricing = () => {
   const history = useHistory();
   const [plans, setPlans] = React.useState([]);
-  const [billingInterval, setBillingInterval] = React.useState("monthly");
   const { hitAxios } = React.useContext(GlobalContext);
   const { formatPrice } = useCurrency();
   const { lang } = React.useContext(TranslateContext);
@@ -448,8 +430,9 @@ const Pricing = () => {
       path: "/api/plan/get_all",
       post: false,
       admin: false,
+      showLoading: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       const sorted = [...res.data.data].sort(
         (a, b) => parseFloat(a.price) - parseFloat(b.price),
       );
@@ -545,34 +528,6 @@ const Pricing = () => {
         </Typography>
       </Box>
 
-      <Box sx={{ display: "flex", gap: 1, mb: 4 }}>
-        {[
-          { key: "monthly", label: lang?.monthly || "Monthly" },
-          { key: "yearly", label: lang?.yearly || "Yearly" },
-        ].map((item) => (
-          <Box
-            key={item.key}
-            onClick={() => setBillingInterval(item.key)}
-            sx={{
-              px: 2.5,
-              py: 0.8,
-              borderRadius: "50px",
-              cursor: "pointer",
-              border: `1px solid ${
-                billingInterval === item.key ? accentColor || btnBg : borderColor
-              }`,
-              color:
-                billingInterval === item.key ? accentColor || btnBg : textSecondary,
-              fontWeight: config.font_weight_semibold,
-              fontFamily: config.font_family,
-              fontSize: "0.85rem",
-            }}
-          >
-            {item.label}
-          </Box>
-        ))}
-      </Box>
-
       {/* ── Cards ── */}
       <Box
         sx={{
@@ -590,7 +545,6 @@ const Pricing = () => {
             history={history}
             key={plan.id}
             plan={plan}
-            billingInterval={billingInterval}
             formatPrice={formatPrice}
           />
         ))}
@@ -608,7 +562,7 @@ const Pricing = () => {
         }}
       >
         {lang?.pricing_footerNote ||
-          "All plans include access to the AI studio. Credits are valid for the full plan duration."}
+          "All plans include lifetime access to the AI studio. Buy extra credits whenever you need more."}
       </Typography>
     </Box>
   );

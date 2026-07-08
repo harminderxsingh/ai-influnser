@@ -3,14 +3,11 @@ import React from "react";
 import CommonDialog from "../../../common/CommonDialog";
 import { Paid, PaidOutlined } from "@mui/icons-material";
 import { GlobalContext } from "../../../context/GlobalContext";
-import moment from "moment";
 
 const UpdatePlan = ({ lang, hitAxios, params, hangleGetUsers }) => {
   const [plans, setPlans] = React.useState([]);
   const { parseJson } = React.useContext(GlobalContext);
   const parsedPlan = parseJson(params?.row?.plan);
-  const planEnding = params?.row?.plan_ending;
-  const isExpired = planEnding && new Date(planEnding) < new Date();
 
   async function getPlans(params) {
     const res = await hitAxios({
@@ -52,11 +49,7 @@ const UpdatePlan = ({ lang, hitAxios, params, hangleGetUsers }) => {
     <div>
       <Tooltip
         title={
-          planEnding
-            ? isExpired
-              ? `⚠️ Expired ${moment(planEnding).fromNow()}`
-              : `✅ Ends ${moment(planEnding).format("DD MMM YYYY")}`
-            : lang.noPlan || "No Plan"
+          params?.value ? lang.lifetime || "Lifetime" : lang.noPlan || "No Plan"
         }
       >
         <Chip
@@ -64,8 +57,8 @@ const UpdatePlan = ({ lang, hitAxios, params, hangleGetUsers }) => {
           onClick={() => changeState("dialog", true)}
           label={params.value ? parsedPlan?.title : lang.noPlan || "No Plan"}
           size="small"
-          variant={isExpired ? "filled" : "outlined"}
-          color={isExpired ? "error" : "default"}
+          variant="outlined"
+          color="default"
         />
       </Tooltip>
 

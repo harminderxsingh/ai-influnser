@@ -8,6 +8,8 @@ import {
   Chip,
   Divider,
   LinearProgress,
+  Button,
+  Stack,
 } from "@mui/material";
 import {
   Face2Outlined,
@@ -18,13 +20,13 @@ import {
   TrendingUpOutlined,
   CheckCircleOutline,
   ErrorOutline,
-  AccessTimeOutlined,
 } from "@mui/icons-material";
 import { GlobalContext } from "../../context/GlobalContext";
 import { useCustomTheme } from "../../utils/useCustomTheme";
 import { UserContext } from "../../context/UserContext";
 import moment from "moment";
 import PageHeader from "../../common/PageHeader";
+import { useHistory } from "react-router-dom";
 
 // ─────────────────────────────────────────────────────────
 // Stat Card
@@ -173,6 +175,7 @@ const Dash = ({ lang }) => {
   const { hitAxios } = useContext(GlobalContext);
   const { userData } = useContext(UserContext);
   const { config } = useCustomTheme();
+  const history = useHistory();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -184,8 +187,9 @@ const Dash = ({ lang }) => {
         path: "/api/user/get_dashboard",
         post: false,
         admin: false,
+        showLoading: false,
       });
-      if (res.data.success) setData(res.data.data);
+      if (res?.data?.success) setData(res.data.data);
     } finally {
       setLoading(false);
     }
@@ -211,13 +215,6 @@ const Dash = ({ lang }) => {
   const maxCredits = Number(plan?.credits || 0);
   const creditPct =
     maxCredits > 0 ? Math.min((credits / maxCredits) * 100, 100) : 0;
-
-  const expiryDate = userData?.plan_ending
-    ? moment(userData.plan_ending)
-    : null;
-  const daysLeft = expiryDate ? expiryDate.diff(moment(), "days") : null;
-  const isExpired = daysLeft !== null && daysLeft < 0;
-  const isExpiringSoon = daysLeft !== null && daysLeft >= 0 && daysLeft <= 5;
 
   const creditBarColor =
     creditPct > 50 ? "success" : creditPct > 20 ? "warning" : "error";
@@ -339,20 +336,8 @@ const Dash = ({ lang }) => {
                     </Typography>
                     <Chip
                       size="small"
-                      label={
-                        isExpired
-                          ? lang?.expired || "Expired"
-                          : isExpiringSoon
-                            ? `${daysLeft}d left`
-                            : expiryDate?.format("MMM D")
-                      }
-                      color={
-                        isExpired
-                          ? "error"
-                          : isExpiringSoon
-                            ? "warning"
-                            : "success"
-                      }
+                      label={lang?.lifetime || "Lifetime"}
+                      color="success"
                       variant="outlined"
                       sx={{ fontWeight: 700, fontSize: "0.68rem" }}
                     />
@@ -409,35 +394,22 @@ const Dash = ({ lang }) => {
                     />
                   </Box>
 
-                  {/* Expiry */}
-                  {expiryDate && !isExpired && (
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => history.push("/#pricing")}
                     >
-                      <AccessTimeOutlined
-                        sx={{ fontSize: "0.8rem", color: "text.disabled" }}
-                      />
-                      <Typography
-                        variant="caption"
-                        color="text.disabled"
-                        fontFamily={config.font_family}
-                      >
-                        {lang?.renewsOn || "Renews"}{" "}
-                        {expiryDate.format("MMM D, YYYY")} ·{" "}
-                        {expiryDate.fromNow()}
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {isExpired && (
-                    <Typography
-                      variant="caption"
-                      color="error.main"
-                      fontWeight={700}
+                      {lang?.upgradePlan || "Upgrade Plan"}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={() => history.push("/user?page=buy-credits")}
                     >
-                      {lang?.planExpired || "Your plan has expired"}
-                    </Typography>
-                  )}
+                      {lang?.buyCredits || "Buy Credits"}
+                    </Button>
+                  </Stack>
                 </>
               ) : (
                 <Typography

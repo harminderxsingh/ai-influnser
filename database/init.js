@@ -647,6 +647,10 @@ const queries = [
     check: "SHOW COLUMNS FROM `web_private` LIKE 'paypal_active';",
   },
   {
+    run: "ALTER TABLE `web_private` ADD COLUMN `paypal_mode` VARCHAR(20) DEFAULT 'live';",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'paypal_mode';",
+  },
+  {
     run: "ALTER TABLE `web_private` ADD COLUMN `pay_mercadopago_access_token` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
     check:
       "SHOW COLUMNS FROM `web_private` LIKE 'pay_mercadopago_access_token';",
@@ -658,6 +662,22 @@ const queries = [
   {
     run: "ALTER TABLE `web_private` ADD COLUMN `mercadopago_active` TINYINT(1) DEFAULT 0;",
     check: "SHOW COLUMNS FROM `web_private` LIKE 'mercadopago_active';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `payu_key` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'payu_key';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `payu_salt` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'payu_salt';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `payu_mode` VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'test';",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'payu_mode';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `payu_active` TINYINT(1) DEFAULT 0;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'payu_active';",
   },
   {
     run: `CREATE TABLE blog (
@@ -977,6 +997,53 @@ const queries = [
   {
     run: `ALTER TABLE ai_providers ADD COLUMN talking_enabled TINYINT(1) DEFAULT 0;`,
     check: "SHOW COLUMNS FROM `ai_providers` LIKE 'talking_enabled';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `launchpad_active` TINYINT(1) DEFAULT 0;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'launchpad_active';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `launchpad_page_slug` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'launchpad';",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'launchpad_page_slug';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `launchpad_embed_html` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'launchpad_embed_html';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `launchpad_webhook_secret` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'launchpad_webhook_secret';",
+  },
+  {
+    run: `CREATE TABLE launchpad_webhook_events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      transaction_id VARCHAR(255) DEFAULT NULL,
+      email VARCHAR(255) DEFAULT NULL,
+      product_name VARCHAR(999) DEFAULT NULL,
+      plan_id INT DEFAULT NULL,
+      uid VARCHAR(255) DEFAULT NULL,
+      status VARCHAR(50) DEFAULT 'received',
+      payload LONGTEXT DEFAULT NULL,
+      error TEXT DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY launchpad_transaction_unique (transaction_id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+    check: "SHOW TABLES LIKE 'launchpad_webhook_events';",
+  },
+  {
+    run: `CREATE TABLE launchpad_pages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      page_path VARCHAR(255) NOT NULL,
+      product_name VARCHAR(999) DEFAULT NULL,
+      plan_id INT DEFAULT NULL,
+      embed_html LONGTEXT DEFAULT NULL,
+      active TINYINT(1) DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY launchpad_page_path_unique (page_path)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+    check: "SHOW TABLES LIKE 'launchpad_pages';",
   },
   {
     run: `ALTER TABLE ai_providers ADD COLUMN talking_base_url TEXT DEFAULT NULL;`,

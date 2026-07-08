@@ -13,15 +13,12 @@ import {
   Chip,
 } from "@mui/material";
 import {
-  PersonOutlined,
   LogoutOutlined,
   WorkspacePremiumOutlined,
   TokenOutlined,
-  CalendarTodayOutlined,
 } from "@mui/icons-material";
 import { useHistory } from "react-router-dom";
 import { UserContext } from "../../context/UserContext";
-import moment from "moment";
 import ProfileDialog from "./ProfileDialog";
 
 const ProfileComp = ({ theme, lang }) => {
@@ -58,13 +55,6 @@ const ProfileComp = ({ theme, lang }) => {
   const maxCredits = Number(plan?.credits || 0);
   const creditPercent =
     maxCredits > 0 ? Math.min((credits / maxCredits) * 100, 100) : 0;
-
-  const expiryDate = userData?.plan_ending
-    ? moment(userData.plan_ending)
-    : null;
-  const daysLeft = expiryDate ? expiryDate.diff(moment(), "days") : null;
-  const isExpiringSoon = daysLeft !== null && daysLeft <= 5;
-  const isExpired = daysLeft !== null && daysLeft < 0;
 
   const creditBarColor =
     creditPercent > 50
@@ -178,34 +168,18 @@ const ProfileComp = ({ theme, lang }) => {
                 </Typography>
               </Stack>
 
-              {daysLeft !== null && (
-                <Chip
-                  size="small"
-                  label={
-                    isExpired
-                      ? lang?.expired || "Expired"
-                      : isExpiringSoon
-                        ? `${daysLeft}d left`
-                        : expiryDate.format("MMM D")
-                  }
-                  sx={{
-                    height: 16,
-                    fontSize: "0.58rem",
-                    fontWeight: 700,
-                    bgcolor: isExpired
-                      ? alpha(theme.palette.error.main, 0.12)
-                      : isExpiringSoon
-                        ? alpha(theme.palette.warning.main, 0.12)
-                        : alpha(theme.palette.success.main, 0.1),
-                    color: isExpired
-                      ? "error.main"
-                      : isExpiringSoon
-                        ? "warning.main"
-                        : "success.main",
-                    border: "none",
-                  }}
-                />
-              )}
+              <Chip
+                size="small"
+                label={lang?.lifetime || "Lifetime"}
+                sx={{
+                  height: 16,
+                  fontSize: "0.58rem",
+                  fontWeight: 700,
+                  bgcolor: alpha(theme.palette.success.main, 0.1),
+                  color: "success.main",
+                  border: "none",
+                }}
+              />
             </Stack>
 
             {/* Credits bar */}
@@ -258,32 +232,32 @@ const ProfileComp = ({ theme, lang }) => {
               }}
             />
 
-            {/* Expiry full date */}
-            {expiryDate && !isExpired && (
-              <Stack direction="row" spacing={0.5} alignItems="center" mt={0.8}>
-                <CalendarTodayOutlined
-                  sx={{ fontSize: 10, color: "text.disabled" }}
-                />
-                <Typography variant="caption" color="text.disabled">
-                  {lang?.renewsOn || "Renews"}{" "}
-                  {expiryDate.format("MMM D, YYYY")} · {expiryDate.fromNow()}
-                </Typography>
-              </Stack>
-            )}
-
-            {isExpired && (
-              <Typography
-                variant="caption"
-                color="error.main"
-                fontWeight={600}
-                display="block"
-                mt={0.6}
-              >
-                {lang?.planExpired || "Your plan has expired"}
+            <Stack direction="row" spacing={0.5} alignItems="center" mt={0.8}>
+              <WorkspacePremiumOutlined
+                sx={{ fontSize: 10, color: "text.disabled" }}
+              />
+              <Typography variant="caption" color="text.disabled">
+                {lang?.lifetimeAccess || "Lifetime access"}
               </Typography>
-            )}
+            </Stack>
           </Box>
         )}
+
+        <Divider sx={{ my: 0.5 }} />
+
+        <MenuItem onClick={() => nav("/#pricing")}>
+          <ListItemIcon>
+            <WorkspacePremiumOutlined sx={{ fontSize: 16 }} />
+          </ListItemIcon>
+          {lang?.upgradePlan || "Upgrade Plan"}
+        </MenuItem>
+
+        <MenuItem onClick={() => nav("/user?page=buy-credits")}>
+          <ListItemIcon>
+            <TokenOutlined sx={{ fontSize: 16 }} />
+          </ListItemIcon>
+          {lang?.buyCredits || "Buy Credits"}
+        </MenuItem>
 
         <Divider sx={{ my: 0.5 }} />
 

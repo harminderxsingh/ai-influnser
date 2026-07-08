@@ -66,6 +66,9 @@ async function sendEmail({ to, subject, html, text } = {}) {
           }
         : {}),
       tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
     await transporter.sendMail({
@@ -199,6 +202,8 @@ function getEnv() {
   }
 }
 
+const LIFETIME_PLAN_ENDING = "2099-12-31 23:59:59";
+
 async function updateUserPlan({ planId, uid, trial = false }) {
   try {
     const [plan] = await query(`SELECT * FROM plan WHERE id = ?`, [planId]);
@@ -216,8 +221,7 @@ async function updateUserPlan({ planId, uid, trial = false }) {
       totalCredit = parseInt(plan?.credits || 0);
     }
 
-    const expiryDays = parseInt(plan?.expiry_days || 0);
-    const planEnding = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+    const planEnding = LIFETIME_PLAN_ENDING;
 
     await query(
       `UPDATE user SET plan = ?, credits = ?, plan_ending = ?, trial_used = ? WHERE uid = ?`,
@@ -237,7 +241,7 @@ async function updateUserPlan({ planId, uid, trial = false }) {
         .replace(/\{\{user_email\}\}/g, user.email)
         .replace(/\{\{plan_name\}\}/g, plan?.title || "")
         .replace(/\{\{plan_credits\}\}/g, totalCredit?.toString() || "0")
-        .replace(/\{\{plan_expiry\}\}/g, planEnding.toLocaleDateString())
+        .replace(/\{\{plan_expiry\}\}/g, "Lifetime")
         .replace(/\{\{date\}\}/g, new Date().toLocaleDateString());
 
       await sendEmail({

@@ -22,10 +22,8 @@ const FrontEnd = () => {
       path: "/api/web/get_web_public",
       post: false,
       admin: false,
-      showLoading: false,
-      showSnackbar: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       setWeb(res.data.data);
     }
   }
@@ -33,6 +31,15 @@ const FrontEnd = () => {
   React.useEffect(() => {
     getWebPublic();
   }, []);
+
+  React.useEffect(() => {
+    if (!window.location.hash) return;
+    const id = window.location.hash.replace("#", "");
+    const timer = setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [web]);
 
   return (
     <div>

@@ -29,11 +29,11 @@ function scrollToSection(id) {
   window.scrollTo({ top, behavior: "smooth" });
 }
 
-const Header = () => {
+const Header = ({ web: webProp }) => {
   const history = useHistory();
   const { hitAxios } = React.useContext(GlobalContext);
   const { lang } = React.useContext(TranslateContext);
-  const [web, setWeb] = React.useState({});
+  const [web, setWeb] = React.useState(webProp || {});
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { config, isDark, toggleColorMode } = useCustomTheme();
 
@@ -53,14 +53,18 @@ const Header = () => {
       post: false,
       admin: false,
     });
-    if (res.data.success) {
+    if (res?.data?.success) {
       setWeb(res.data.data);
     }
   }
 
   React.useEffect(() => {
+    if (webProp) {
+      setWeb(webProp);
+      return;
+    }
     getWebPublic();
-  }, []);
+  }, [webProp]);
 
   const appBarBg = isDark
     ? config.appBar.backgroundColor_dark

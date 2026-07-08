@@ -35,9 +35,10 @@ const CheckoutSuccess = () => {
   const mp_ext_ref = searchParams.get("external_reference");
   const verified = searchParams.get("verified");
   const product_type = searchParams.get("product_type");
+  const error = searchParams.get("error");
 
   React.useEffect(() => {
-    if (gateway === "razorpay" && verified) {
+    if ((gateway === "razorpay" || gateway === "payu") && verified === "1") {
       setSuccessProductType(product_type || "");
       setStatus("success");
       setMsg(
@@ -45,6 +46,9 @@ const CheckoutSuccess = () => {
           ? "Credits added successfully!"
           : "Plan activated!",
       );
+    } else if (gateway === "payu") {
+      setStatus("error");
+      setMsg(error || "PayU payment verification failed.");
     } else if (gateway === "stripe" && session_id) {
       verifyStripe(session_id);
     } else if (gateway === "paypal" && order_id) {

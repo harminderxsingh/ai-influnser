@@ -353,12 +353,10 @@ const ViewUser = ({ lang, params, hitAxios, hangleGetUsers }) => {
                     color="text.secondary"
                     fontWeight={500}
                   >
-                    {lang.planEnding || "Plan Ending"}
+                    {lang.planValidity || "Plan Validity"}
                   </Typography>
                   <Typography variant="body1" sx={{ mt: 0.5 }}>
-                    {params?.row?.plan_ending
-                      ? moment(params.row.plan_ending).format("DD MMM YYYY")
-                      : lang.na || "N/A"}
+                    {params?.row?.plan ? lang.lifetime || "Lifetime" : lang.na || "N/A"}
                   </Typography>
                 </Box>
               </Grid>

@@ -1,7 +1,6 @@
 const path = require("path");
 const { query } = require("../database/connection");
 const {
-  getDaysFromNow,
   downloadImage,
   logUsage,
   sendUsageUpdateEmail,
@@ -25,8 +24,6 @@ async function getCreditFee() {
 
 function getUserCredits(user) {
   try {
-    const days = getDaysFromNow(user?.plan_ending);
-    if (days <= 0) return 0;
     return parseInt(user?.credits) || 0;
   } catch {
     return 0;

@@ -7,7 +7,6 @@ import {
   DeleteOutlined,
   CheckCircle,
   Person,
-  AccessTime,
 } from "@mui/icons-material";
 import {
   Button,
@@ -39,13 +38,8 @@ const ManagePlans = ({ lang }) => {
     selectedPlan: null,
     title: "",
     price: "",
-    monthly_price: "",
-    yearly_price: "",
-    recurring_enabled: false,
-    default_billing_interval: "monthly",
     price_strike: "",
     credits: "",
-    expiry_days: "",
     max_characters: "",
     popular: false,
   });
@@ -75,13 +69,8 @@ const ManagePlans = ({ lang }) => {
         selectedPlan: plan,
         title: plan.title,
         price: plan.price,
-        monthly_price: plan.monthly_price || plan.price,
-        yearly_price: plan.yearly_price || Number(plan.price || 0) * 12,
-        recurring_enabled: false,
-        default_billing_interval: plan.default_billing_interval || "monthly",
         price_strike: plan.price_strike,
         credits: plan.credits,
-        expiry_days: plan.expiry_days,
         max_characters: plan.max_characters,
         popular: plan.popular === 1,
       });
@@ -92,13 +81,8 @@ const ManagePlans = ({ lang }) => {
         selectedPlan: null,
         title: "",
         price: "",
-        monthly_price: "",
-        yearly_price: "",
-        recurring_enabled: false,
-        default_billing_interval: "monthly",
         price_strike: "",
         credits: "",
-        expiry_days: "",
         max_characters: "",
         popular: false,
       });
@@ -112,13 +96,8 @@ const ManagePlans = ({ lang }) => {
       selectedPlan: null,
       title: "",
       price: "",
-      monthly_price: "",
-      yearly_price: "",
-      recurring_enabled: false,
-      default_billing_interval: "monthly",
       price_strike: "",
       credits: "",
-      expiry_days: "",
       max_characters: "",
       popular: false,
     });
@@ -131,14 +110,9 @@ const ManagePlans = ({ lang }) => {
       admin: true,
       obj: {
         title: state.title,
-        price: state.monthly_price || state.price,
-        monthly_price: state.monthly_price || state.price,
-        yearly_price: state.yearly_price,
-        recurring_enabled: false,
-        default_billing_interval: state.default_billing_interval,
+        price: state.price,
         price_strike: state.price_strike,
         credits: state.credits,
-        expiry_days: state.expiry_days,
         max_characters: state.max_characters,
         popular: state.popular,
       },
@@ -156,14 +130,9 @@ const ManagePlans = ({ lang }) => {
       obj: {
         id: state.selectedPlan.id,
         title: state.title,
-        price: state.monthly_price || state.price,
-        monthly_price: state.monthly_price || state.price,
-        yearly_price: state.yearly_price,
-        recurring_enabled: false,
-        default_billing_interval: state.default_billing_interval,
+        price: state.price,
         price_strike: state.price_strike,
         credits: state.credits,
-        expiry_days: state.expiry_days,
         max_characters: state.max_characters,
         popular: state.popular,
       },
@@ -329,7 +298,7 @@ const ManagePlans = ({ lang }) => {
                           fontSize: "0.875rem",
                         }}
                       >
-                        {lang.perMonth || "/mo"}
+                      {lang.oneTime || "one-time"}
                       </Typography>
                     </Box>
                     <Typography
@@ -341,7 +310,7 @@ const ManagePlans = ({ lang }) => {
                         display: "block",
                       }}
                     >
-                      {lang.billedYearly || "Billed yearly, cancel anytime"}
+                      {lang.lifetimeAccess || "Lifetime access"}
                     </Typography>
                   </Box>
 
@@ -453,8 +422,7 @@ const ManagePlans = ({ lang }) => {
                           lineHeight: 1.6,
                         }}
                       >
-                        {lang.validFor || "Valid for"} {plan.expiry_days}{" "}
-                        {lang.days || "days"}
+                        {lang.validFor || "Validity"}: {lang.lifetime || "Lifetime"}
                       </Typography>
                     </Box>
 
@@ -548,33 +516,15 @@ const ManagePlans = ({ lang }) => {
 
             <Grid item xs={6}>
               <TextField
-                value={state.monthly_price}
+                value={state.price}
                 onChange={(e) =>
                   setState({
                     ...state,
                     price: e.target.value,
-                    monthly_price: e.target.value,
                   })
                 }
                 fullWidth
-                label={lang.monthlyPrice || "Monthly Price"}
-                type="number"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">$</InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                value={state.yearly_price}
-                onChange={(e) =>
-                  setState({ ...state, yearly_price: e.target.value })
-                }
-                fullWidth
-                label={lang.yearlyPrice || "Yearly Price"}
+                label={lang.oneTimePrice || "One-time Price"}
                 type="number"
                 InputProps={{
                   startAdornment: (
@@ -609,18 +559,6 @@ const ManagePlans = ({ lang }) => {
                 }
                 fullWidth
                 label={lang.credits || "Credits"}
-                type="number"
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                value={state.expiry_days}
-                onChange={(e) =>
-                  setState({ ...state, expiry_days: e.target.value })
-                }
-                fullWidth
-                label={lang.expiryDays || "Expiry (Days)"}
                 type="number"
               />
             </Grid>

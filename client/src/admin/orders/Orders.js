@@ -335,7 +335,7 @@ const Orders = ({ lang }) => {
                             {order.product_type === "credit_package"
                               ? `${Number(order.package_credits || 0).toLocaleString()} credits`
                               : order.plan_credits
-                              ? `${Number(order.plan_credits).toLocaleString()} credits · ${order.expiry_days}d`
+                              ? `${Number(order.plan_credits).toLocaleString()} credits · Lifetime`
                               : "—"}
                           </Typography>
                         </Stack>

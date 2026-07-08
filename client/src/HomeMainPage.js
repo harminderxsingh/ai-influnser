@@ -25,6 +25,7 @@ import CheckoutSuccess from "./frontend/checkout/CheckoutSuccess";
 import PasswordRecovery from "./frontend/PasswordRecovery";
 import AdminPasswordRecovery from "./frontend/AdminPasswordRecovery";
 import NotFoundPage from "./frontend/NotFoundPage";
+import LaunchpadPage from "./frontend/LaunchpadPage";
 
 const HomeMainPage = () => {
   const GLOBAL_CONTEXT = React.useContext(GlobalContext);
@@ -79,7 +80,6 @@ const HomeMainPage = () => {
       {/* <SeoComp /> */}
       <Dialog
         fullScreen
-        disableScrollLock
         sx={{
           color: "#fff",
           zIndex: (theme) => theme.zIndex.modal + 99, // Higher than dialogs
@@ -127,6 +127,8 @@ const HomeMainPage = () => {
           />
           <PublicRoute path="/checkout/credits/:id" exact component={CheckOut} />
           <PublicRoute path="/checkout/:id" exact component={CheckOut} />
+          <PublicRoute path="/launchpad" exact component={LaunchpadPage} />
+          <PublicRoute path="/launchpad/:slug" exact component={LaunchpadPage} />
           <PublicRoute
             path="/password-recovery"
             exact
@@ -138,6 +140,9 @@ const HomeMainPage = () => {
             component={AdminPasswordRecovery}
           />
 
+          <PublicRoute path="/:pagePath/:subPath/:thirdPath" exact component={LaunchpadPage} />
+          <PublicRoute path="/:pagePath/:subPath" exact component={LaunchpadPage} />
+          <PublicRoute path="/:pagePath" exact component={LaunchpadPage} />
           <PublicRoute path="*" component={NotFoundPage} />
         </Switch>
       </div>

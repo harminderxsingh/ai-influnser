@@ -29,7 +29,8 @@ function createPool() {
       database: config.database,
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0,
+      queueLimit: 50,
+      connectTimeout: 10000,
     });
 
     console.log("Database pool created");

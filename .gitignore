@@ -4,7 +4,8 @@ node_modules
 /client/build
 /client/public/assets
 /client/public/media
-routes/themes/
+# Per-server active theme only — theme definitions stay in git
+routes/themes/active-theme.json
 # Sensitive config — contains DB creds, JWT secret, URLs
 config.json
 .env

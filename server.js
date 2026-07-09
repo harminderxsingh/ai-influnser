@@ -74,10 +74,23 @@ const publicRoot = path.resolve(__dirname, "./client/public");
 
 app.use("/media", express.static(path.join(publicRoot, "media")));
 app.use("/assets", express.static(path.join(publicRoot, "assets")));
+app.use("/static", express.static(path.join(publicRoot, "static")));
 app.use(express.static(publicRoot));
 
-app.get("/{*path}", (req, res) => {
-  res.sendFile(path.join(publicRoot, "index.html"));
+app.get("/{*path}", (req, res, next) => {
+  const p = req.path || "";
+  if (
+    p.startsWith("/api") ||
+    p.startsWith("/static") ||
+    p.startsWith("/media") ||
+    p.startsWith("/assets")
+  ) {
+    return res.status(404).send("Not found");
+  }
+
+  res.sendFile(path.join(publicRoot, "index.html"), (err) => {
+    if (err) next(err);
+  });
 });
 
 // Get port from config or default

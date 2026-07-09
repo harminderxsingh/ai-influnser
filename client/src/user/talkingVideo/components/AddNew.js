@@ -37,6 +37,11 @@ import { GlobalContext } from "../../../context/GlobalContext";
 
 const MAX_CHARS = 1000;
 
+const createSubmissionKey = () => {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
 // ── Small influencer selector card ───────────────────────────
 const InfSelectCard = ({ influencer, isSelected, onSelect }) => {
   const theme = useTheme();
@@ -236,6 +241,8 @@ const AddNew = ({ lang, inf, getVideos }) => {
   const [open, setOpen] = React.useState(false);
   const [step, setStep] = React.useState(0);
   const [saving, setSaving] = React.useState(false);
+  const [submissionKey, setSubmissionKey] = React.useState("");
+  const submitLockRef = React.useRef(false);
 
   // Form state
   const [selectedModel, setSelectedModel] = React.useState(null);
@@ -363,6 +370,7 @@ const AddNew = ({ lang, inf, getVideos }) => {
     audioRef.current?.pause();
     audioRef.current = null;
     setPlayingVoice(null);
+    submitLockRef.current = false;
     setOpen(false);
     setStep(0);
     setSelectedModel(null);
@@ -373,30 +381,41 @@ const AddNew = ({ lang, inf, getVideos }) => {
     setLangView("lang");
     setLangSearch("");
     setVoiceSearch("");
+    setSubmissionKey("");
   }
 
   async function handleSubmit() {
+    if (submitLockRef.current || saving) return;
+
+    submitLockRef.current = true;
     setSaving(true);
-    const res = await hitAxios({
-      path: "/api/talking/add_new_task",
-      post: true,
-      admin: false,
-      obj: {
-        selectedModel,
-        text,
-        voice: selectedVoice?.name || "en-US-AriaNeural",
-        lang: selectedLang?.code || "en-US",
-        gender: gender === "all" ? "female" : gender,
-        voice_style: "general",
-        project_style: "close_up",
-        aspect_ratio: "9:16",
-        character_style: "realistic",
-      },
-    });
-    setSaving(false);
-    if (res?.data?.success) {
-      getVideos();
-      handleClose();
+
+    try {
+      const res = await hitAxios({
+        path: "/api/talking/add_new_task",
+        post: true,
+        admin: false,
+        obj: {
+          selectedModel,
+          text,
+          voice: selectedVoice?.name || "en-US-AriaNeural",
+          lang: selectedLang?.code || "en-US",
+          gender: gender === "all" ? "female" : gender,
+          voice_style: "general",
+          project_style: "close_up",
+          aspect_ratio: "9:16",
+          character_style: "realistic",
+          submission_key: submissionKey,
+        },
+      });
+
+      if (res?.data?.success) {
+        getVideos();
+        handleClose();
+      }
+    } finally {
+      submitLockRef.current = false;
+      setSaving(false);
     }
   }
 
@@ -795,7 +814,10 @@ const AddNew = ({ lang, inf, getVideos }) => {
   return (
     <>
       <Button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setSubmissionKey(createSubmissionKey());
+          setOpen(true);
+        }}
         size="large"
         startIcon={<AddOutlined />}
         variant="contained"

@@ -8,6 +8,8 @@ const {
 const { fetchJobStatus, createJob } = require("./api");
 const { frontendUrl } = require("../config.json");
 
+const TALKING_STATUS_POLL_SECONDS = 30;
+
 // ============================================
 // HELPERS
 // ============================================
@@ -49,6 +51,53 @@ async function setTalkingError(id, msg) {
   await query(
     `UPDATE talking_content SET status = 'error', error_message = ? WHERE id = ?`,
     [msg, id],
+  );
+}
+
+async function claimTalkingForSubmission(id) {
+  const result = await query(
+    `UPDATE talking_content
+     SET status = 'submitting'
+     WHERE id = ?
+       AND status = 'processing'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+
+  return result.affectedRows > 0;
+}
+
+async function releaseTalkingClaim(id) {
+  await query(
+    `UPDATE talking_content
+     SET status = 'processing'
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+}
+
+async function touchTalkingStatusCheck(id) {
+  await query(
+    `UPDATE talking_content
+     SET updated_at = NOW()
+     WHERE id = ?
+       AND status = 'processing'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [id],
+  );
+}
+
+async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE talking_content
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')
+       AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
+    [],
   );
 }
 
@@ -118,7 +167,10 @@ async function processTalkingContent(item, provider, fee) {
       return;
     }
 
-    if (result.status === "pending") return;
+    if (result.status === "pending") {
+      await touchTalkingStatusCheck(id);
+      return;
+    }
 
     const user = await getUser(uid);
 
@@ -216,6 +268,12 @@ async function processTalkingContent(item, provider, fee) {
       des: successDes,
       status: "Success",
     });
+    return;
+  }
+
+  const claimed = await claimTalkingForSubmission(id);
+  if (!claimed) {
+    console.log(`⏭️  talking_content #${id} already claimed for submission`);
     return;
   }
 
@@ -323,6 +381,7 @@ async function processTalkingContent(item, provider, fee) {
     console.log(
       `⏭️  Skipping talking_content #${id} — credits taken by concurrent task`,
     );
+    await releaseTalkingClaim(id);
     await logUsage({
       uid,
       task: "talking_video_maker",
@@ -366,10 +425,22 @@ async function processTalkingContent(item, provider, fee) {
     return;
   }
 
-  await query(`UPDATE talking_content SET job_id = ? WHERE id = ?`, [
-    create.taskId,
-    id,
-  ]);
+  const saved = await query(
+    `UPDATE talking_content
+     SET status = 'processing', job_id = ?
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [create.taskId, id],
+  );
+
+  if (!saved.affectedRows) {
+    console.error(
+      `⚠️  talking_content #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
+    );
+    await refundCredits(uid, fee);
+    return;
+  }
 
   console.log(
     `🚀 talking_content #${id} job created — taskId: ${create.taskId}`,
@@ -406,15 +477,23 @@ async function runTalkingVideo({ provider }) {
       return;
     }
 
+    await recoverStaleSubmissions();
+
     const contentList = await query(
-      `SELECT * FROM talking_content WHERE status = 'processing'`,
+      `SELECT * FROM talking_content
+       WHERE status = 'processing'
+         AND (
+           job_id IS NULL
+           OR job_id = ''
+           OR updated_at < DATE_SUB(NOW(), INTERVAL ${TALKING_STATUS_POLL_SECONDS} SECOND)
+         )`,
     );
 
     if (!contentList?.length) return;
 
-    await Promise.allSettled(
-      contentList.map((item) => processTalkingContent(item, provider, fee)),
-    );
+    for (const item of contentList) {
+      await processTalkingContent(item, provider, fee);
+    }
   } catch (err) {
     console.error("❌ runTalkingVideo fatal error:", err.message);
     await logUsage({

@@ -8,6 +8,8 @@ const { fetchJobStatus, createJob } = require("./api");
 const path = require("path");
 const { frontendUrl } = require("../config.json");
 
+const GALLERY_STATUS_POLL_SECONDS = 30;
+
 // ============================================
 // HELPERS
 // ============================================
@@ -49,6 +51,53 @@ async function setGalleryError(id, msg) {
   await query(
     `UPDATE gallery SET status = 'error', error_message = ? WHERE id = ?`,
     [msg, id],
+  );
+}
+
+async function claimGalleryForSubmission(id) {
+  const result = await query(
+    `UPDATE gallery
+     SET status = 'submitting'
+     WHERE id = ?
+       AND status = 'processing'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+
+  return result.affectedRows > 0;
+}
+
+async function releaseGalleryClaim(id) {
+  await query(
+    `UPDATE gallery
+     SET status = 'processing'
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+}
+
+async function touchGalleryStatusCheck(id) {
+  await query(
+    `UPDATE gallery
+     SET updated_at = NOW()
+     WHERE id = ?
+       AND status = 'processing'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [id],
+  );
+}
+
+async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE gallery
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')
+       AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
+    [],
   );
 }
 
@@ -108,7 +157,10 @@ async function processVariation(item, provider, fee) {
       return;
     }
 
-    if (result.status === "pending") return;
+    if (result.status === "pending") {
+      await touchGalleryStatusCheck(id);
+      return;
+    }
 
     const user = await getUser(uid);
 
@@ -209,6 +261,12 @@ async function processVariation(item, provider, fee) {
       des: successDes,
       status: "Success",
     });
+    return;
+  }
+
+  const claimed = await claimGalleryForSubmission(id);
+  if (!claimed) {
+    console.log(`⏭️  gallery #${id} already claimed for submission`);
     return;
   }
 
@@ -314,6 +372,7 @@ async function processVariation(item, provider, fee) {
     console.log(
       `⏭️  Skipping gallery #${id} — credits taken by concurrent task`,
     );
+    await releaseGalleryClaim(id);
     await logUsage({
       uid,
       task: "inf_var_maker",
@@ -349,10 +408,22 @@ async function processVariation(item, provider, fee) {
     return;
   }
 
-  await query(`UPDATE gallery SET job_id = ? WHERE id = ?`, [
-    create.taskId,
-    id,
-  ]);
+  const saved = await query(
+    `UPDATE gallery
+     SET status = 'processing', job_id = ?
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [create.taskId, id],
+  );
+
+  if (!saved.affectedRows) {
+    console.error(
+      `⚠️  gallery #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
+    );
+    await refundCredits(uid, fee);
+    return;
+  }
 
   console.log(`🚀 gallery #${id} job created — taskId: ${create.taskId}`);
   await logUsage({
@@ -384,15 +455,23 @@ async function runInfVariation({ provider }) {
       return;
     }
 
+    await recoverStaleSubmissions();
+
     const galleryList = await query(
-      `SELECT * FROM gallery WHERE status = 'processing'`,
+      `SELECT * FROM gallery
+       WHERE status = 'processing'
+         AND (
+           job_id IS NULL
+           OR job_id = ''
+           OR updated_at < DATE_SUB(NOW(), INTERVAL ${GALLERY_STATUS_POLL_SECONDS} SECOND)
+         )`,
     );
 
     if (!galleryList?.length) return;
 
-    await Promise.allSettled(
-      galleryList.map((item) => processVariation(item, provider, fee)),
-    );
+    for (const item of galleryList) {
+      await processVariation(item, provider, fee);
+    }
   } catch (err) {
     console.error("❌ runInfVariation fatal error:", err.message);
     await logUsage({

@@ -30,6 +30,13 @@ import { UserContext } from "../../context/UserContext";
 const Influencers = ({ lang }) => {
   const { hitAxios } = React.useContext(GlobalContext);
   const { getUserData } = React.useContext(UserContext);
+  const submitLockRef = React.useRef(false);
+
+  const createSubmissionKey = () => {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  };
+
   const [state, setState] = React.useState({
     dialog: false,
     activeStep: 0,
@@ -41,6 +48,7 @@ const Influencers = ({ lang }) => {
     name: "",
     description: "",
     prompt: "",
+    submissionKey: "",
   });
 
   const [influencers, setInfluencers] = React.useState([]);
@@ -72,7 +80,7 @@ const Influencers = ({ lang }) => {
             photoFile: null,
             name: "",
             description: "",
-            prompt: "",
+            submissionKey: "",
           }));
         }
       }
@@ -94,7 +102,8 @@ const Influencers = ({ lang }) => {
 
   React.useEffect(() => {
     const hasProcessingInfluencer = influencers.some(
-      (influencer) => influencer.status === "processing",
+      (influencer) =>
+        influencer.status === "processing" || influencer.status === "submitting",
     );
 
     if (!hasProcessingInfluencer) return undefined;
@@ -118,6 +127,7 @@ const Influencers = ({ lang }) => {
   };
 
   const handleOpenDialog = () => {
+    submitLockRef.current = false;
     setState((prev) => ({
       ...prev,
       dialog: true,
@@ -128,10 +138,12 @@ const Influencers = ({ lang }) => {
       name: "",
       description: "",
       prompt: "",
+      submissionKey: createSubmissionKey(),
     }));
   };
 
   const handleCloseDialog = () => {
+    submitLockRef.current = false;
     setState((prev) => ({
       ...prev,
       dialog: false,
@@ -142,6 +154,7 @@ const Influencers = ({ lang }) => {
       name: "",
       description: "",
       prompt: "",
+      submissionKey: "",
     }));
   };
 
@@ -218,6 +231,9 @@ const Influencers = ({ lang }) => {
   };
 
   const handleSubmit = async () => {
+    if (submitLockRef.current || state.loading) return;
+
+    submitLockRef.current = true;
     setState((prev) => ({ ...prev, loading: true }));
 
     try {
@@ -225,6 +241,7 @@ const Influencers = ({ lang }) => {
       formData.append("name", state.name);
       formData.append("description", state.description);
       formData.append("creation_type", state.creationType);
+      formData.append("submission_key", state.submissionKey);
 
       if (state.creationType === "prompt") {
         formData.append("prompt", state.prompt);
@@ -247,12 +264,14 @@ const Influencers = ({ lang }) => {
         setTimeout(() => {
           getUserData();
         }, 3000);
-      } else {
-        showSnackbar(res?.data?.msg || "Something went wrong", "error");
+        return;
       }
+
+      showSnackbar(res?.data?.msg || "Something went wrong", "error");
     } catch (err) {
       showSnackbar("Error submitting form", "error");
     } finally {
+      submitLockRef.current = false;
       setState((prev) => ({ ...prev, loading: false }));
     }
   };

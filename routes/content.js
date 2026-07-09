@@ -1,24 +1,19 @@
 const express = require("express");
 const router = express.Router();
-const crypto = require("crypto");
 const { query } = require("../database/connection");
 const validateUser = require("../middlewares/user");
 const { checkPlan } = require("../middlewares/common");
 const { uploadImage, deleteFile } = require("../utils/common");
 const path = require("path");
-
-function normalizeSubmissionKey(raw) {
-  if (typeof raw === "string" && /^[a-zA-Z0-9_-]{12,64}$/.test(raw.trim())) {
-    return raw.trim();
-  }
-
-  return crypto.randomUUID();
-}
+const { normalizeSubmissionKey } = require("../utils/submissionKey");
 
 // add content
 router.post("/add_new", validateUser, checkPlan, async (req, res) => {
   try {
-    const { model, ref_video } = req.body;
+    const { model, ref_video, submission_key } = req.body;
+    const submissionKey = normalizeSubmissionKey(submission_key);
+    const uid = req.decode.uid;
+
     if (!model || !ref_video) {
       return res.json({
         msg: "Please select a model and a video",
@@ -26,15 +21,65 @@ router.post("/add_new", validateUser, checkPlan, async (req, res) => {
       });
     }
 
-    await query(
-      `INSERT INTO content (uid, model, ref_video, status) VALUES (?,?,?,?)`,
-      [
-        req.decode.uid,
-        JSON.stringify(model),
-        JSON.stringify(ref_video),
-        "processing",
-      ],
+    const modelJson = JSON.stringify(model);
+    const refVideoJson = JSON.stringify(ref_video);
+
+    if (submissionKey) {
+      const [existing] = await query(
+        `SELECT id FROM content WHERE uid = ? AND submission_key = ?`,
+        [uid, submissionKey],
+      );
+
+      if (existing) {
+        return res.json({
+          success: true,
+          msg: "The video is already getting ready...",
+          id: existing.id,
+        });
+      }
+    }
+
+    const [recentDuplicate] = await query(
+      `SELECT id FROM content
+       WHERE uid = ?
+         AND model = ?
+         AND ref_video = ?
+         AND status IN ('processing', 'submitting')
+         AND created_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+       ORDER BY id DESC
+       LIMIT 1`,
+      [uid, modelJson, refVideoJson],
     );
+
+    if (recentDuplicate) {
+      return res.json({
+        success: true,
+        msg: "The video is already getting ready...",
+        id: recentDuplicate.id,
+      });
+    }
+
+    try {
+      await query(
+        `INSERT INTO content (uid, model, ref_video, status, submission_key) VALUES (?,?,?,?,?)`,
+        [uid, modelJson, refVideoJson, "processing", submissionKey],
+      );
+    } catch (insertErr) {
+      if (insertErr.code === "ER_DUP_ENTRY") {
+        const [existing] = await query(
+          `SELECT id FROM content WHERE uid = ? AND submission_key = ?`,
+          [uid, submissionKey],
+        );
+
+        return res.json({
+          success: true,
+          msg: "The video is already getting ready...",
+          id: existing?.id,
+        });
+      }
+
+      throw insertErr;
+    }
 
     res.json({ success: true, msg: "The video is getting ready..." });
   } catch (err) {

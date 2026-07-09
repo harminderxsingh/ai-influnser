@@ -8,6 +8,8 @@ const {
 const { fetchJobStatus, createJob } = require("./api");
 const { frontendUrl } = require("../config.json");
 
+const CONTENT_STATUS_POLL_SECONDS = 30;
+
 // ============================================
 // HELPERS
 // ============================================
@@ -49,6 +51,53 @@ async function setContentError(id, msg) {
   await query(
     `UPDATE content SET status = 'error', error_message = ? WHERE id = ?`,
     [msg, id],
+  );
+}
+
+async function claimContentForSubmission(id) {
+  const result = await query(
+    `UPDATE content
+     SET status = 'submitting'
+     WHERE id = ?
+       AND status = 'processing'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+
+  return result.affectedRows > 0;
+}
+
+async function releaseContentClaim(id) {
+  await query(
+    `UPDATE content
+     SET status = 'processing'
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+}
+
+async function touchContentStatusCheck(id) {
+  await query(
+    `UPDATE content
+     SET updated_at = NOW()
+     WHERE id = ?
+       AND status = 'processing'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [id],
+  );
+}
+
+async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE content
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')
+       AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
+    [],
   );
 }
 
@@ -108,7 +157,10 @@ async function processContent(item, provider, fee) {
       return;
     }
 
-    if (result.status === "pending") return;
+    if (result.status === "pending") {
+      await touchContentStatusCheck(id);
+      return;
+    }
 
     const user = await getUser(uid);
 
@@ -209,6 +261,12 @@ async function processContent(item, provider, fee) {
       des: successDes,
       status: "Success",
     });
+    return;
+  }
+
+  const claimed = await claimContentForSubmission(id);
+  if (!claimed) {
+    console.log(`⏭️  content #${id} already claimed for submission`);
     return;
   }
 
@@ -360,6 +418,7 @@ async function processContent(item, provider, fee) {
     console.log(
       `⏭️  Skipping content #${id} — credits taken by concurrent task`,
     );
+    await releaseContentClaim(id);
     await logUsage({
       uid,
       task: "content_maker",
@@ -391,10 +450,22 @@ async function processContent(item, provider, fee) {
     return;
   }
 
-  await query(`UPDATE content SET job_id = ? WHERE id = ?`, [
-    create.taskId,
-    id,
-  ]);
+  const saved = await query(
+    `UPDATE content
+     SET status = 'processing', job_id = ?
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [create.taskId, id],
+  );
+
+  if (!saved.affectedRows) {
+    console.error(
+      `⚠️  content #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
+    );
+    await refundCredits(uid, fee);
+    return;
+  }
 
   console.log(`🚀 content #${id} job created — taskId: ${create.taskId}`);
   await logUsage({
@@ -426,15 +497,23 @@ async function runContent({ provider }) {
       return;
     }
 
+    await recoverStaleSubmissions();
+
     const contentList = await query(
-      `SELECT * FROM content WHERE status = 'processing'`,
+      `SELECT * FROM content
+       WHERE status = 'processing'
+         AND (
+           job_id IS NULL
+           OR job_id = ''
+           OR updated_at < DATE_SUB(NOW(), INTERVAL ${CONTENT_STATUS_POLL_SECONDS} SECOND)
+         )`,
     );
 
     if (!contentList?.length) return;
 
-    await Promise.allSettled(
-      contentList.map((item) => processContent(item, provider, fee)),
-    );
+    for (const item of contentList) {
+      await processContent(item, provider, fee);
+    }
   } catch (err) {
     console.error("❌ runContent fatal error:", err.message);
     await logUsage({

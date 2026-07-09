@@ -30,6 +30,12 @@ import ReelCard from "./ReelCard";
 import InfluencerCard from "./InfluencerCard";
 
 const AddNew = ({ lang = {}, inf = [], hitAxios, getContent }) => {
+  const createSubmissionKey = () => {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  };
+
+  const submitLockRef = React.useRef(false);
   const [state, setState] = React.useState({
     dialog: false,
     step: 0,
@@ -41,6 +47,8 @@ const AddNew = ({ lang = {}, inf = [], hitAxios, getContent }) => {
     videos: [],
     loading: false,
     loadingMore: false,
+    isSubmitting: false,
+    submissionKey: "",
     pagination: {
       page: 1,
       limit: 12,
@@ -146,23 +154,35 @@ const AddNew = ({ lang = {}, inf = [], hitAxios, getContent }) => {
     setState({ ...state, step: 0 });
   };
 
-  async function handleConfirm(params) {
-    const res = await hitAxios({
-      path: "/api/content/add_new",
-      post: true,
-      admin: false,
-      obj: {
-        model: state.selectedInfluencer,
-        ref_video: state.selectedVideo,
-      },
-    });
-    if (res.data.success) {
-      await getContent();
-      handleClose();
+  async function handleConfirm() {
+    if (submitLockRef.current || state.isSubmitting) return;
+
+    submitLockRef.current = true;
+    setState((prev) => ({ ...prev, isSubmitting: true }));
+
+    try {
+      const res = await hitAxios({
+        path: "/api/content/add_new",
+        post: true,
+        admin: false,
+        obj: {
+          model: state.selectedInfluencer,
+          ref_video: state.selectedVideo,
+          submission_key: state.submissionKey,
+        },
+      });
+      if (res.data.success) {
+        await getContent();
+        handleClose();
+      }
+    } finally {
+      submitLockRef.current = false;
+      setState((prev) => ({ ...prev, isSubmitting: false }));
     }
   }
 
   const handleClose = () => {
+    submitLockRef.current = false;
     setState({
       dialog: false,
       step: 0,
@@ -174,6 +194,8 @@ const AddNew = ({ lang = {}, inf = [], hitAxios, getContent }) => {
       videos: [],
       loading: false,
       loadingMore: false,
+      isSubmitting: false,
+      submissionKey: "",
       pagination: {
         page: 1,
         limit: 12,
@@ -187,7 +209,13 @@ const AddNew = ({ lang = {}, inf = [], hitAxios, getContent }) => {
     <div>
       <Button
         size="large"
-        onClick={() => setState({ ...state, dialog: true })}
+        onClick={() =>
+          setState({
+            ...state,
+            dialog: true,
+            submissionKey: createSubmissionKey(),
+          })
+        }
         startIcon={<AddOutlined />}
         variant="contained"
       >

@@ -3,6 +3,7 @@ const router = express.Router();
 const { query } = require("../database/connection");
 const validateUser = require("../middlewares/user");
 const { checkPlan } = require("../middlewares/common");
+const { normalizeSubmissionKey } = require("../utils/submissionKey");
 
 // ── POST /api/talking/add_new_task ────────────────────────────
 router.post("/add_new_task", validateUser, checkPlan, async (req, res) => {
@@ -17,7 +18,10 @@ router.post("/add_new_task", validateUser, checkPlan, async (req, res) => {
       project_style = "close_up",
       aspect_ratio = "9:16",
       character_style = "realistic",
+      submission_key,
     } = req.body;
+    const submissionKey = normalizeSubmissionKey(submission_key);
+    const uid = req.decode.uid;
 
     if (!selectedModel?.photo_url) {
       return res.json({ success: false, msg: "Please select an influencer" });
@@ -27,26 +31,81 @@ router.post("/add_new_task", validateUser, checkPlan, async (req, res) => {
     }
 
     const imageUrl = selectedModel.photo_url;
+    const modelJson = JSON.stringify(selectedModel);
+    const trimmedText = text.trim();
 
-    await query(
-      `INSERT INTO talking_content 
-        (uid, model, image_url, text, voice, lang, gender, voice_style, project_style, aspect_ratio, character_style, status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        req.decode.uid,
-        JSON.stringify(selectedModel),
-        imageUrl,
-        text.trim(),
-        voice,
-        lang,
-        gender,
-        voice_style,
-        project_style,
-        aspect_ratio,
-        character_style,
-        "processing",
-      ],
+    if (submissionKey) {
+      const [existing] = await query(
+        `SELECT id FROM talking_content WHERE uid = ? AND submission_key = ?`,
+        [uid, submissionKey],
+      );
+
+      if (existing) {
+        return res.json({
+          success: true,
+          msg: "Your talking video is already being generated!",
+          id: existing.id,
+        });
+      }
+    }
+
+    const [recentDuplicate] = await query(
+      `SELECT id FROM talking_content
+       WHERE uid = ?
+         AND model = ?
+         AND text = ?
+         AND status IN ('processing', 'submitting')
+         AND created_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+       ORDER BY id DESC
+       LIMIT 1`,
+      [uid, modelJson, trimmedText],
     );
+
+    if (recentDuplicate) {
+      return res.json({
+        success: true,
+        msg: "Your talking video is already being generated!",
+        id: recentDuplicate.id,
+      });
+    }
+
+    try {
+      await query(
+        `INSERT INTO talking_content 
+        (uid, model, image_url, text, voice, lang, gender, voice_style, project_style, aspect_ratio, character_style, status, submission_key)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          uid,
+          modelJson,
+          imageUrl,
+          trimmedText,
+          voice,
+          lang,
+          gender,
+          voice_style,
+          project_style,
+          aspect_ratio,
+          character_style,
+          "processing",
+          submissionKey,
+        ],
+      );
+    } catch (insertErr) {
+      if (insertErr.code === "ER_DUP_ENTRY") {
+        const [existing] = await query(
+          `SELECT id FROM talking_content WHERE uid = ? AND submission_key = ?`,
+          [uid, submissionKey],
+        );
+
+        return res.json({
+          success: true,
+          msg: "Your talking video is already being generated!",
+          id: existing?.id,
+        });
+      }
+
+      throw insertErr;
+    }
 
     res.json({ success: true, msg: "Your talking video is being generated!" });
   } catch (err) {

@@ -8,6 +8,7 @@ const fs = require("fs");
 const randomstring = require("randomstring");
 const { checkPlan } = require("../middlewares/common");
 const { logUsage } = require("../utils/common");
+const { normalizeSubmissionKey } = require("../utils/submissionKey");
 
 // Ensure media directory exists
 const mediaDir = path.join(__dirname, "../client/public/media");
@@ -38,7 +39,9 @@ const getExtensionFromMimetype = (mimetype) => {
 // Add new influencer
 router.post("/add_model", validateUser, checkPlan, async (req, res) => {
   try {
-    const { name, description, creation_type, prompt } = req.body;
+    const { name, description, creation_type, prompt, submission_key } =
+      req.body;
+    const submissionKey = normalizeSubmissionKey(submission_key);
     const uid = req.decode.uid;
 
     // Validation
@@ -143,22 +146,97 @@ router.post("/add_model", validateUser, checkPlan, async (req, res) => {
       status = "processing";
     }
 
+    if (submissionKey) {
+      const [existing] = await query(
+        `SELECT id FROM influencers WHERE uid = ? AND submission_key = ?`,
+        [uid, submissionKey],
+      );
+
+      if (existing) {
+        return res.json({
+          success: true,
+          msg:
+            creation_type === "prompt"
+              ? "AI character is already being generated..."
+              : "Character is already being created...",
+          data: {
+            id: existing.id,
+            uid,
+            status: "processing",
+          },
+        });
+      }
+    }
+
+    if (creation_type === "prompt") {
+      const [recentDuplicate] = await query(
+        `SELECT id FROM influencers
+         WHERE uid = ?
+           AND creation_type = 'prompt'
+           AND name = ?
+           AND prompt = ?
+           AND status IN ('processing', 'submitting')
+           AND created_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+         ORDER BY id DESC
+         LIMIT 1`,
+        [uid, name, prompt],
+      );
+
+      if (recentDuplicate) {
+        return res.json({
+          success: true,
+          msg: "AI character is already being generated...",
+          data: {
+            id: recentDuplicate.id,
+            uid,
+            status: "processing",
+          },
+        });
+      }
+    }
+
     // ── Insert into database ───────────────────────────────────
-    const result = await query(
-      `INSERT INTO influencers 
-      (uid, name, description, creation_type, photo_url, prompt, status, data) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        uid,
-        name,
-        description,
-        creation_type,
-        photoFilename,
-        prompt || null,
-        status,
-        JSON.stringify(metadata),
-      ],
-    );
+    let result;
+    try {
+      result = await query(
+        `INSERT INTO influencers
+        (uid, name, description, creation_type, photo_url, prompt, status, data, submission_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          uid,
+          name,
+          description,
+          creation_type,
+          photoFilename,
+          prompt || null,
+          status,
+          JSON.stringify(metadata),
+          submissionKey,
+        ],
+      );
+    } catch (insertErr) {
+      if (insertErr.code === "ER_DUP_ENTRY") {
+        const [existing] = await query(
+          `SELECT id FROM influencers WHERE uid = ? AND submission_key = ?`,
+          [uid, submissionKey],
+        );
+
+        return res.json({
+          success: true,
+          msg:
+            creation_type === "prompt"
+              ? "AI character is already being generated..."
+              : "Character is already being created...",
+          data: {
+            id: existing?.id,
+            uid,
+            status: "processing",
+          },
+        });
+      }
+
+      throw insertErr;
+    }
 
     // ── Log upload success only ────────────────────────────────
     if (creation_type === "upload") {

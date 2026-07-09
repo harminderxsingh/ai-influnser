@@ -6,6 +6,8 @@ const {
 } = require("../utils/common");
 const { fetchJobStatus, createJob } = require("./api");
 
+const INF_STATUS_POLL_SECONDS = 30;
+
 // ============================================
 // HELPERS
 // ============================================
@@ -47,6 +49,53 @@ async function setInfError(id, msg) {
   await query(
     `UPDATE influencers SET status = 'error', error_message = ? WHERE id = ?`,
     [msg, id],
+  );
+}
+
+async function claimInfluencerForSubmission(id) {
+  const result = await query(
+    `UPDATE influencers
+     SET status = 'submitting'
+     WHERE id = ?
+       AND status = 'processing'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+
+  return result.affectedRows > 0;
+}
+
+async function releaseInfluencerClaim(id) {
+  await query(
+    `UPDATE influencers
+     SET status = 'processing'
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+}
+
+async function touchInfluencerStatusCheck(id) {
+  await query(
+    `UPDATE influencers
+     SET updated_at = NOW()
+     WHERE id = ?
+       AND status = 'processing'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [id],
+  );
+}
+
+async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE influencers
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')
+       AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
+    [],
   );
 }
 
@@ -94,7 +143,10 @@ async function processInfluencer(inf, provider, fee) {
       return;
     }
 
-    if (result.status === "pending") return;
+    if (result.status === "pending") {
+      await touchInfluencerStatusCheck(id);
+      return;
+    }
 
     // ── Fetch user once — needed for email from here on ──────
     const user = await getUser(uid);
@@ -200,6 +252,12 @@ async function processInfluencer(inf, provider, fee) {
     return;
   }
 
+  const claimed = await claimInfluencerForSubmission(id);
+  if (!claimed) {
+    console.log(`⏭️  inf #${id} already claimed for submission`);
+    return;
+  }
+
   // ── No job yet → validate user ────────────────────────────────
   const user = await getUser(uid);
 
@@ -260,6 +318,7 @@ async function processInfluencer(inf, provider, fee) {
 
   if (!reserved) {
     console.log(`⏭️  Skipping inf #${id} — credits taken by concurrent task`);
+    await releaseInfluencerClaim(id);
     await logUsage({
       uid,
       task: "inf_maker",
@@ -293,10 +352,22 @@ async function processInfluencer(inf, provider, fee) {
     return;
   }
 
-  await query(`UPDATE influencers SET job_id = ? WHERE id = ?`, [
-    create.taskId,
-    id,
-  ]);
+  const saved = await query(
+    `UPDATE influencers
+     SET status = 'processing', job_id = ?
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [create.taskId, id],
+  );
+
+  if (!saved.affectedRows) {
+    console.error(
+      `⚠️  inf #${id} job ${create.taskId} created but row already has a job_id - refunding duplicate charge`,
+    );
+    await refundCredits(uid, fee);
+    return;
+  }
 
   console.log(`🚀 inf #${id} job created — taskId: ${create.taskId}`);
   await logUsage({
@@ -326,17 +397,23 @@ async function runMakeInf({ provider }) {
       return;
     }
 
+    await recoverStaleSubmissions();
+
     const infList = await query(
-      `SELECT * FROM influencers WHERE status = 'processing'`,
+      `SELECT * FROM influencers
+       WHERE status = 'processing'
+         AND (
+           job_id IS NULL
+           OR job_id = ''
+           OR updated_at < DATE_SUB(NOW(), INTERVAL ${INF_STATUS_POLL_SECONDS} SECOND)
+         )`,
     );
 
     if (!infList?.length) return;
 
-    await Promise.allSettled(
-      infList.map((inf) => processInfluencer(inf, provider, fee)),
-    );
-
-    // console.log(`✅ Processed batch of ${infList.length} influencer(s)`);
+    for (const inf of infList) {
+      await processInfluencer(inf, provider, fee);
+    }
   } catch (err) {
     console.error("❌ runMakeInf fatal error:", err.message);
     await logUsage({

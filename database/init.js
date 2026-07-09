@@ -523,6 +523,15 @@ const queries = [
     check: "SHOW COLUMNS FROM `influencers` LIKE 'job_id';",
   },
   {
+    run: "ALTER TABLE `influencers` ADD COLUMN `submission_key` VARCHAR(64) DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `influencers` LIKE 'submission_key';",
+  },
+  {
+    run: "ALTER TABLE `influencers` ADD UNIQUE KEY `uniq_influencer_submission` (`uid`, `submission_key`);",
+    check:
+      "SHOW INDEX FROM `influencers` WHERE Key_name = 'uniq_influencer_submission';",
+  },
+  {
     run: "ALTER TABLE `gallery` ADD COLUMN `job_id` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
     check: "SHOW COLUMNS FROM `gallery` LIKE 'job_id';",
   },
@@ -1165,6 +1174,33 @@ const queries = [
   WHERE provider_key = 'usevelix';`,
     check:
       "SELECT talking_enabled FROM ai_providers WHERE provider_key='usevelix' AND talking_enabled=1;",
+  },
+  {
+    run: "ALTER TABLE `content` ADD COLUMN `submission_key` VARCHAR(64) DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `content` LIKE 'submission_key';",
+  },
+  {
+    run: "ALTER TABLE `content` ADD UNIQUE KEY `uniq_content_submission` (`uid`, `submission_key`);",
+    check:
+      "SHOW INDEX FROM `content` WHERE Key_name = 'uniq_content_submission';",
+  },
+  {
+    run: "ALTER TABLE `gallery` ADD COLUMN `submission_key` VARCHAR(64) DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `gallery` LIKE 'submission_key';",
+  },
+  {
+    run: "ALTER TABLE `gallery` ADD UNIQUE KEY `uniq_gallery_submission` (`uid`, `submission_key`);",
+    check:
+      "SHOW INDEX FROM `gallery` WHERE Key_name = 'uniq_gallery_submission';",
+  },
+  {
+    run: "ALTER TABLE `talking_content` ADD COLUMN `submission_key` VARCHAR(64) DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `talking_content` LIKE 'submission_key';",
+  },
+  {
+    run: "ALTER TABLE `talking_content` ADD UNIQUE KEY `uniq_talking_submission` (`uid`, `submission_key`);",
+    check:
+      "SHOW INDEX FROM `talking_content` WHERE Key_name = 'uniq_talking_submission';",
   },
 ];
 

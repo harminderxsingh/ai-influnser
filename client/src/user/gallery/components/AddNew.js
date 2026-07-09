@@ -32,15 +32,23 @@ const TYPE_CONFIG = {
   variation: { label: "Variation", color: "#3B82F6", icon: TuneOutlined },
 };
 
+const createSubmissionKey = () => {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
 const AddNew = ({ lang, inf, getGallery }) => {
   const [prompts, setPrompts] = React.useState([]);
   const { hitAxios } = React.useContext(GlobalContext);
   const [filterType, setFilterType] = React.useState("variation");
+  const submitLockRef = React.useRef(false);
 
   const [state, setState] = React.useState({
     dialog: false,
     selectedModel: {},
     prompt: "",
+    isSubmitting: false,
+    submissionKey: "",
   });
 
   const cs = (key, val) => setState((p) => ({ ...p, [key]: val }));
@@ -56,15 +64,34 @@ const AddNew = ({ lang, inf, getGallery }) => {
   }
 
   async function handleAdd() {
-    const res = await hitAxios({
-      path: "/api/gallery/add_new_task",
-      post: true,
-      admin: false,
-      obj: state,
-    });
-    if (res?.data?.success) {
-      getGallery();
-      set({ dialog: false, prompt: "", selectedModel: {} });
+    if (submitLockRef.current || state.isSubmitting) return;
+
+    submitLockRef.current = true;
+    setState((prev) => ({ ...prev, isSubmitting: true }));
+
+    try {
+      const res = await hitAxios({
+        path: "/api/gallery/add_new_task",
+        post: true,
+        admin: false,
+        obj: {
+          ...state,
+          submission_key: state.submissionKey,
+        },
+      });
+      if (res?.data?.success) {
+        getGallery();
+        set({
+          dialog: false,
+          prompt: "",
+          selectedModel: {},
+          isSubmitting: false,
+          submissionKey: "",
+        });
+      }
+    } finally {
+      submitLockRef.current = false;
+      setState((prev) => ({ ...prev, isSubmitting: false }));
     }
   }
 
@@ -78,7 +105,12 @@ const AddNew = ({ lang, inf, getGallery }) => {
   return (
     <div>
       <Button
-        onClick={() => cs("dialog", true)}
+        onClick={() =>
+          set({
+            dialog: true,
+            submissionKey: createSubmissionKey(),
+          })
+        }
         size="large"
         startIcon={<AddOutlined />}
         variant="contained"
@@ -90,7 +122,10 @@ const AddNew = ({ lang, inf, getGallery }) => {
         icon={AddAPhoto}
         title={lang?.selectModel || "Select your model"}
         open={state.dialog}
-        onClose={() => set({ dialog: false, prompt: "", selectedModel: {} })}
+        onClose={() => {
+          submitLockRef.current = false;
+          set({ dialog: false, prompt: "", selectedModel: {}, submissionKey: "" });
+        }}
         fullWidth
       >
         <Stack direction="column" spacing={3} pt={1}>

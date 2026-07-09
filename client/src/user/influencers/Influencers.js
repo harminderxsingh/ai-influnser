@@ -3,7 +3,6 @@ import PageHeader from "../../common/PageHeader";
 import {
   Face2,
   AddOutlined,
-  DeleteOutlined,
   ArrowForwardOutlined,
   ArrowBackOutlined,
   CheckCircleOutlined,
@@ -16,15 +15,9 @@ import {
   Stepper,
   Step,
   StepLabel,
-  useTheme,
   CircularProgress,
   Snackbar,
   Alert,
-  Card,
-  CardMedia,
-  Typography,
-  IconButton,
-  Chip,
 } from "@mui/material";
 import CommonDialog from "../../common/CommonDialog";
 import Step1 from "./components/Step1";
@@ -35,7 +28,6 @@ import InfluencerCard from "./components/InfluencerCard";
 import { UserContext } from "../../context/UserContext";
 
 const Influencers = ({ lang }) => {
-  const theme = useTheme();
   const { hitAxios } = React.useContext(GlobalContext);
   const { getUserData } = React.useContext(UserContext);
   const [state, setState] = React.useState({
@@ -59,29 +51,57 @@ const Influencers = ({ lang }) => {
     lang.reviewAndCreate || "Review & Create",
   ];
 
-  React.useEffect(() => {
-    fetchInfluencers();
-  }, []);
-
-  const fetchInfluencers = async () => {
+  const fetchInfluencers = React.useCallback(async ({ closeDialog = false } = {}) => {
     try {
       const res = await hitAxios({
         path: "/api/inf/get_models",
         post: false,
         admin: false,
+        showLoading: false,
       });
 
       if (res?.data?.success) {
         setInfluencers(res.data.data || []);
-        handleCloseDialog();
+        if (closeDialog) {
+          setState((prev) => ({
+            ...prev,
+            dialog: false,
+            activeStep: 0,
+            creationType: "upload",
+            photoPreview: null,
+            photoFile: null,
+            name: "",
+            description: "",
+            prompt: "",
+          }));
+        }
       }
     } catch (err) {
-      showSnackbar(
-        lang.errorLoadingInfluencers || "Error loading influencers",
-        "error",
-      );
+      setState((prev) => ({
+        ...prev,
+        snackbar: {
+          open: true,
+          message: lang.errorLoadingInfluencers || "Error loading influencers",
+          severity: "error",
+        },
+      }));
     }
-  };
+  }, [hitAxios, lang.errorLoadingInfluencers]);
+
+  React.useEffect(() => {
+    fetchInfluencers();
+  }, [fetchInfluencers]);
+
+  React.useEffect(() => {
+    const hasProcessingInfluencer = influencers.some(
+      (influencer) => influencer.status === "processing",
+    );
+
+    if (!hasProcessingInfluencer) return undefined;
+
+    const intervalId = setInterval(fetchInfluencers, 10000);
+    return () => clearInterval(intervalId);
+  }, [fetchInfluencers, influencers]);
 
   const showSnackbar = (message, severity = "success") => {
     setState((prev) => ({
@@ -223,7 +243,7 @@ const Influencers = ({ lang }) => {
 
       if (res?.data?.success) {
         showSnackbar(res.data.msg, "success");
-        fetchInfluencers();
+        fetchInfluencers({ closeDialog: true });
         setTimeout(() => {
           getUserData();
         }, 3000);

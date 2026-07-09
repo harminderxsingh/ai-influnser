@@ -9,6 +9,7 @@ import {
   SaveOutlined,
   TokenOutlined,
   VideoCameraFrontOutlined,
+  TipsAndUpdatesOutlined,
 } from "@mui/icons-material";
 import {
   Box,
@@ -71,6 +72,15 @@ const TASK_TYPES = (lang) => [
     desc:
       lang?.talkingVideoSub ||
       "Pick the influencer whose face will appear in the talking video.",
+  },
+  {
+    key: "prompt_recommend_maker",
+    icon: TipsAndUpdatesOutlined,
+    color: "#EC4899",
+    title: lang?.promptRecommendation || "Prompt Recommendations",
+    desc:
+      lang?.promptRecommendationDesc ||
+      "Credits required to generate recommended prompt ideas",
   },
 ];
 
@@ -154,10 +164,11 @@ const TaskPricing = ({ lang }) => {
     content_video_maker: "",
     product_showcase_maker: "",
     talking_video_maker: "",
+    prompt_recommend_maker: "",
   });
 
   // ── Fetch existing values on mount
-  async function getWebPvt() {
+  const getWebPvt = React.useCallback(async () => {
     const res = await hitAxios({
       path: "/api/web/get_web_pvt",
       post: false,
@@ -171,9 +182,10 @@ const TaskPricing = ({ lang }) => {
         content_video_maker: Number(d.content_video_maker),
         product_showcase_maker: Number(d.product_showcase_maker),
         talking_video_maker: Number(d.talking_video_maker),
+        prompt_recommend_maker: Number(d.prompt_recommend_maker || 5),
       });
     }
-  }
+  }, [hitAxios]);
 
   // ── Save updated credits
   async function handleSaveData() {
@@ -187,6 +199,7 @@ const TaskPricing = ({ lang }) => {
         content_video_maker: credits.content_video_maker,
         product_showcase_maker: credits.product_showcase_maker,
         talking_video_maker: credits.talking_video_maker,
+        prompt_recommend_maker: credits.prompt_recommend_maker,
       },
     });
   }
@@ -200,7 +213,7 @@ const TaskPricing = ({ lang }) => {
 
   React.useEffect(() => {
     getWebPvt();
-  }, []);
+  }, [getWebPvt]);
 
   const tasks = TASK_TYPES(lang);
 

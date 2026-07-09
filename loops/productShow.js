@@ -8,6 +8,8 @@ const {
 const { fetchJobStatus, createJob } = require("./api");
 const { frontendUrl } = require("../config.json");
 
+const SHOWCASE_STATUS_POLL_SECONDS = 30;
+
 // ============================================
 // HELPERS
 // ============================================
@@ -47,8 +49,55 @@ async function refundCredits(uid, fee) {
 
 async function setContentError(id, msg) {
   await query(
-    `UPDATE product_content SET status = 'error', error_message = ? WHERE id = ?`,
+    `UPDATE product_content SET status = 'error', error_message = ?, job_id = NULL WHERE id = ?`,
     [msg, id],
+  );
+}
+
+async function claimProductForSubmission(id) {
+  const result = await query(
+    `UPDATE product_content
+     SET status = 'submitting'
+     WHERE id = ?
+       AND status = 'processing'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+
+  return result.affectedRows > 0;
+}
+
+async function releaseProductClaim(id) {
+  await query(
+    `UPDATE product_content
+     SET status = 'processing'
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [id],
+  );
+}
+
+async function touchProductStatusCheck(id) {
+  await query(
+    `UPDATE product_content
+     SET updated_at = NOW()
+     WHERE id = ?
+       AND status = 'processing'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [id],
+  );
+}
+
+async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE product_content
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')
+       AND updated_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE)`,
+    [],
   );
 }
 
@@ -108,7 +157,10 @@ async function processProductShowcase(item, provider, fee) {
       return;
     }
 
-    if (result.status === "pending") return;
+    if (result.status === "pending") {
+      await touchProductStatusCheck(id);
+      return;
+    }
 
     const user = await getUser(uid);
 
@@ -205,6 +257,12 @@ async function processProductShowcase(item, provider, fee) {
       des: successDes,
       status: "Success",
     });
+    return;
+  }
+
+  const claimed = await claimProductForSubmission(id);
+  if (!claimed) {
+    console.log(`⏭️  product_content #${id} already claimed for submission`);
     return;
   }
 
@@ -356,11 +414,12 @@ async function processProductShowcase(item, provider, fee) {
     console.log(
       `⏭️  Skipping product_content #${id} — credits taken by concurrent task`,
     );
+    await releaseProductClaim(id);
     await logUsage({
       uid,
       task: "product_showcase_maker",
       status: "skipped",
-      des: `product_content #${id} skipped — credits taken by concurrent task`,
+      des: `product_content #${id} skipped — credits taken by a concurrent task`,
     });
     return;
   }
@@ -392,10 +451,22 @@ async function processProductShowcase(item, provider, fee) {
     return;
   }
 
-  await query(`UPDATE product_content SET job_id = ? WHERE id = ?`, [
-    create.taskId,
-    id,
-  ]);
+  const saved = await query(
+    `UPDATE product_content
+     SET status = 'processing', job_id = ?
+     WHERE id = ?
+       AND status = 'submitting'
+       AND (job_id IS NULL OR job_id = '')`,
+    [create.taskId, id],
+  );
+
+  if (!saved.affectedRows) {
+    console.error(
+      `⚠️  product_content #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
+    );
+    await refundCredits(uid, fee);
+    return;
+  }
 
   console.log(
     `🚀 product_content #${id} job created — taskId: ${create.taskId}`,
@@ -429,15 +500,23 @@ async function productShowcase({ provider }) {
       return;
     }
 
+    await recoverStaleSubmissions();
+
     const contentList = await query(
-      `SELECT * FROM product_content WHERE status = 'processing'`,
+      `SELECT * FROM product_content
+       WHERE status = 'processing'
+         AND (
+           job_id IS NULL
+           OR job_id = ''
+           OR updated_at < DATE_SUB(NOW(), INTERVAL ${SHOWCASE_STATUS_POLL_SECONDS} SECOND)
+         )`,
     );
 
     if (!contentList?.length) return;
 
-    await Promise.allSettled(
-      contentList.map((item) => processProductShowcase(item, provider, fee)),
-    );
+    for (const item of contentList) {
+      await processProductShowcase(item, provider, fee);
+    }
   } catch (err) {
     console.error("❌ productShowcase fatal error:", err.message);
     await logUsage({

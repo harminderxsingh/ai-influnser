@@ -177,6 +177,9 @@ const Step2 = ({
             <Grid item xs={12}>
               <PromptExamples
                 lang={lang}
+                name={name}
+                description={description}
+                creationType={creationType}
                 prompt={prompt}
                 onPromptChange={onPromptChange}
               />

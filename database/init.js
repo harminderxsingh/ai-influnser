@@ -230,14 +230,15 @@ const queries = [
             inf_var_maker VARCHAR(255) DEFAULT NULL,
             content_video_maker VARCHAR(255) DEFAULT NULL,
             product_showcase_maker VARCHAR(255) DEFAULT NULL,
+            prompt_recommend_maker VARCHAR(255) DEFAULT '5',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
     check: "SHOW TABLES LIKE 'web_private';",
   },
   {
-    run: `INSERT INTO web_private (inf_maker, inf_var_maker, content_video_maker, product_showcase_maker) 
-        VALUES (100, 150, 200, 250);`,
+    run: `INSERT INTO web_private (inf_maker, inf_var_maker, content_video_maker, product_showcase_maker, prompt_recommend_maker) 
+        VALUES (100, 150, 200, 250, 5);`,
     check: "SELECT id FROM web_private LIMIT 1;",
   },
   {
@@ -528,6 +529,15 @@ const queries = [
   {
     run: "ALTER TABLE `product_content` ADD COLUMN `job_id` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
     check: "SHOW COLUMNS FROM `product_content` LIKE 'job_id';",
+  },
+  {
+    run: "ALTER TABLE `product_content` ADD COLUMN `submission_key` VARCHAR(64) DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `product_content` LIKE 'submission_key';",
+  },
+  {
+    run: "ALTER TABLE `product_content` ADD UNIQUE KEY `uniq_product_content_submission` (`uid`, `submission_key`);",
+    check:
+      "SHOW INDEX FROM `product_content` WHERE Key_name = 'uniq_product_content_submission';",
   },
   {
     run: "ALTER TABLE `web_private` ADD COLUMN `smtp_host` TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
@@ -969,6 +979,26 @@ const queries = [
   {
     run: `ALTER TABLE \`web_private\` ADD COLUMN \`talking_video_maker\` VARCHAR(255) DEFAULT '0';`,
     check: "SHOW COLUMNS FROM `web_private` LIKE 'talking_video_maker';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `prompt_recommend_maker` VARCHAR(255) DEFAULT '5';",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'prompt_recommend_maker';",
+  },
+  {
+    run: `CREATE TABLE prompt_recommendations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    uid VARCHAR(255) DEFAULT NULL,
+    type VARCHAR(100) DEFAULT NULL,
+    source_id VARCHAR(255) DEFAULT NULL,
+    input LONGTEXT DEFAULT NULL,
+    prompts LONGTEXT DEFAULT NULL,
+    credits VARCHAR(255) DEFAULT NULL,
+    status VARCHAR(50) DEFAULT 'success',
+    error_message LONGTEXT DEFAULT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+    check: "SHOW TABLES LIKE 'prompt_recommendations';",
   },
   {
     run: `CREATE TABLE talking_content (

@@ -1,10 +1,19 @@
 const express = require("express");
 const router = express.Router();
+const crypto = require("crypto");
 const { query } = require("../database/connection");
 const validateUser = require("../middlewares/user");
 const { checkPlan } = require("../middlewares/common");
 const { uploadImage, deleteFile } = require("../utils/common");
 const path = require("path");
+
+function normalizeSubmissionKey(raw) {
+  if (typeof raw === "string" && /^[a-zA-Z0-9_-]{12,64}$/.test(raw.trim())) {
+    return raw.trim();
+  }
+
+  return crypto.randomUUID();
+}
 
 // add content
 router.post("/add_new", validateUser, checkPlan, async (req, res) => {
@@ -76,7 +85,10 @@ router.post(
   checkPlan,
   async (req, res) => {
     try {
-      const { model_id, model_name, prompt, aspect_ratio } = req.body;
+      const { model_id, model_name, prompt, aspect_ratio, submission_key } =
+        req.body;
+      const submissionKey = normalizeSubmissionKey(submission_key);
+      const uid = req.decode.uid;
 
       // Validation
       if (!model_id || !model_name) {
@@ -91,6 +103,21 @@ router.post(
           msg: "Please upload a product image",
           success: false,
         });
+      }
+
+      if (submissionKey) {
+        const [existing] = await query(
+          `SELECT id FROM product_content WHERE uid = ? AND submission_key = ?`,
+          [uid, submissionKey],
+        );
+
+        if (existing) {
+          return res.json({
+            success: true,
+            msg: "The video is already getting ready...",
+            id: existing.id,
+          });
+        }
       }
 
       // Upload image
@@ -120,23 +147,64 @@ router.post(
         return res.json({ msg: "Selected model does not exist" });
       }
 
+      const modelJson = JSON.stringify(modelData);
+      const [recentDuplicate] = await query(
+        `SELECT id FROM product_content
+         WHERE uid = ?
+           AND ref_photo = ?
+           AND prompt = ?
+           AND status IN ('processing', 'submitting')
+           AND created_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+         ORDER BY id DESC
+         LIMIT 1`,
+        [uid, uploadResult.filename, prompt || ""],
+      );
+
+      if (recentDuplicate) {
+        return res.json({
+          success: true,
+          msg: "The video is already getting ready...",
+          id: recentDuplicate.id,
+        });
+      }
+
       // Prepare other data JSON
       const otherData = {
         aspect_ratio: aspect_ratio || "9:16",
       };
 
       // Insert into database
-      await query(
-        `INSERT INTO product_content (uid, model, ref_photo, prompt, other, status) VALUES (?,?,?,?,?,?)`,
-        [
-          req.decode.uid,
-          JSON.stringify(modelData),
-          uploadResult.filename,
-          prompt || "",
-          JSON.stringify(otherData),
-          "processing",
-        ],
-      );
+      try {
+        await query(
+          `INSERT INTO product_content
+            (uid, model, ref_photo, prompt, other, status, submission_key)
+           VALUES (?,?,?,?,?,?,?)`,
+          [
+            uid,
+            modelJson,
+            uploadResult.filename,
+            prompt || "",
+            JSON.stringify(otherData),
+            "processing",
+            submissionKey,
+          ],
+        );
+      } catch (insertErr) {
+        if (insertErr.code === "ER_DUP_ENTRY") {
+          const [existing] = await query(
+            `SELECT id FROM product_content WHERE uid = ? AND submission_key = ?`,
+            [uid, submissionKey],
+          );
+
+          return res.json({
+            success: true,
+            msg: "The video is already getting ready...",
+            id: existing?.id,
+          });
+        }
+
+        throw insertErr;
+      }
 
       res.json({ success: true, msg: "The video is getting ready..." });
     } catch (err) {

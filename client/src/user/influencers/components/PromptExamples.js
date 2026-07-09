@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Paper,
-  Grid,
   TextField,
   Chip,
   IconButton,
@@ -13,6 +12,9 @@ import {
   useTheme,
   ToggleButtonGroup,
   ToggleButton,
+  Button,
+  CircularProgress,
+  Alert,
 } from "@mui/material";
 import {
   AutoAwesomeOutlined,
@@ -27,20 +29,33 @@ const TYPE_CONFIG = {
   variation: { label: "Variation", color: "#3B82F6", icon: TuneOutlined },
 };
 
-const PromptExamples = ({ lang, prompt, onPromptChange }) => {
+const PromptExamples = ({
+  lang,
+  name,
+  description,
+  creationType,
+  prompt,
+  onPromptChange,
+}) => {
   const [prompts, setPrompts] = React.useState([]);
   const [filterType, setFilterType] = React.useState("new");
+  const [recommendations, setRecommendations] = React.useState([]);
+  const [recommendationLoading, setRecommendationLoading] =
+    React.useState(false);
+  const [recommendationError, setRecommendationError] = React.useState("");
+  const [recommendationCredits, setRecommendationCredits] =
+    React.useState(null);
   const { hitAxios } = React.useContext(GlobalContext);
   const theme = useTheme();
 
-  async function getPrompt() {
+  const getPrompt = React.useCallback(async () => {
     const res = await hitAxios({
       path: "/api/admin/get_prompt_t",
       post: false,
       admin: false,
     });
     if (res?.data?.success) setPrompts(res.data.data);
-  }
+  }, [hitAxios]);
 
   const filtered = prompts.filter((p) => p.type === filterType);
 
@@ -48,9 +63,47 @@ const PromptExamples = ({ lang, prompt, onPromptChange }) => {
     navigator.clipboard.writeText(text);
   };
 
+  async function generateRecommendations() {
+    if (recommendationLoading) return;
+
+    setRecommendationLoading(true);
+    setRecommendationError("");
+
+    try {
+      const res = await hitAxios({
+        path: "/api/prompt-recommendation/generate",
+        post: true,
+        admin: false,
+        showLoading: false,
+        obj: {
+          type: "influencer",
+          context: {
+            name,
+            description,
+            creationType,
+            promptSeed: prompt,
+          },
+        },
+      });
+
+      if (res?.data?.success) {
+        setRecommendations(res.data.prompts || []);
+        setRecommendationCredits(res.data.credits);
+      } else {
+        setRecommendationError(
+          res?.data?.msg || "Could not generate prompt ideas",
+        );
+      }
+    } catch (err) {
+      setRecommendationError("Could not generate prompt ideas");
+    } finally {
+      setRecommendationLoading(false);
+    }
+  }
+
   React.useEffect(() => {
     getPrompt();
-  }, []);
+  }, [getPrompt]);
 
   return (
     <Box
@@ -91,6 +144,94 @@ const PromptExamples = ({ lang, prompt, onPromptChange }) => {
       />
 
       <Divider sx={{ my: 3 }} />
+
+      <Box
+        sx={{
+          mb: 3,
+          p: 2,
+          borderRadius: 2,
+          bgcolor: alpha(theme.palette.secondary.main, 0.06),
+          border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`,
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ xs: "stretch", sm: "center" }}
+          justifyContent="space-between"
+          gap={1.5}
+        >
+          <Box>
+            <Typography variant="subtitle2" fontWeight={700}>
+              {lang?.recommendedPrompts || "Recommended Prompt Ideas"}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {lang?.recommendedInfluencerPromptsDesc ||
+                "Generate ready-to-use prompts from the character name and description."}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={
+              recommendationLoading ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <AutoAwesomeOutlined />
+              )
+            }
+            disabled={recommendationLoading}
+            onClick={generateRecommendations}
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          >
+            {recommendationLoading
+              ? lang?.generating || "Generating..."
+              : lang?.generateIdeas || "Generate Ideas"}
+          </Button>
+        </Stack>
+
+        {recommendationError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {recommendationError}
+          </Alert>
+        )}
+
+        {recommendations.length > 0 && (
+          <Stack spacing={1.25} sx={{ mt: 2 }}>
+            {recommendationCredits !== null && (
+              <Typography variant="caption" color="text.secondary">
+                {lang?.creditsUsed || "Credits used"}: {recommendationCredits}
+              </Typography>
+            )}
+            {recommendations.map((item, index) => (
+              <Paper
+                key={`${item.title}-${index}`}
+                onClick={() => onPromptChange(item.prompt)}
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  cursor: "pointer",
+                  border: `1px solid ${theme.palette.divider}`,
+                  "&:hover": {
+                    borderColor: theme.palette.secondary.main,
+                    bgcolor: alpha(theme.palette.secondary.main, 0.04),
+                  },
+                }}
+              >
+                <Typography variant="caption" fontWeight={800}>
+                  {item.title || `${lang?.idea || "Idea"} ${index + 1}`}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5 }}
+                >
+                  {item.prompt}
+                </Typography>
+              </Paper>
+            ))}
+          </Stack>
+        )}
+      </Box>
 
       {/* Section title + Type toggle */}
       <Stack
@@ -208,7 +349,6 @@ const PromptExamples = ({ lang, prompt, onPromptChange }) => {
                   variant="caption"
                   color="text.secondary"
                   sx={{
-                    display: "block",
                     lineHeight: 1.7,
                     display: "-webkit-box",
                     WebkitLineClamp: 3,

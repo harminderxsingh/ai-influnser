@@ -11,6 +11,7 @@ import {
   CloudUploadOutlined,
   CloseOutlined,
   Face2,
+  AutoAwesomeOutlined,
 } from "@mui/icons-material";
 import {
   Box,
@@ -30,6 +31,8 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   IconButton,
+  CircularProgress,
+  Alert,
 } from "@mui/material";
 import React from "react";
 import CommonDialog from "../../../common/CommonDialog";
@@ -37,6 +40,12 @@ import ModelCard from "./ModelCard";
 import PageHeader from "../../../common/PageHeader";
 
 const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
+  const createSubmissionKey = () => {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  };
+
+  const submitLockRef = React.useRef(false);
   const [state, setState] = React.useState({
     dialog: false,
     step: 0,
@@ -45,6 +54,12 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
     productImagePreview: null,
     prompt: "",
     aspectRatio: "9:16",
+    isSubmitting: false,
+    submissionKey: "",
+    promptRecommendations: [],
+    promptRecommendationLoading: false,
+    promptRecommendationError: "",
+    promptRecommendationCredits: null,
   });
 
   const theme = useTheme();
@@ -101,28 +116,91 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
   };
 
   async function handleConfirm() {
+    if (submitLockRef.current || state.isSubmitting) return;
+
+    submitLockRef.current = true;
+    setState((prev) => ({ ...prev, isSubmitting: true }));
+
     const formData = new FormData();
     formData.append("model_id", state.selectedModel.id);
     formData.append("model_name", state.selectedModel.name);
     formData.append("product_image", state.productImage);
     formData.append("prompt", state.prompt);
     formData.append("aspect_ratio", state.aspectRatio);
+    formData.append("submission_key", state.submissionKey);
 
-    const res = await hitAxios({
-      path: "/api/content/add_new_product_content",
-      post: true,
-      admin: false,
-      obj: formData,
-      isFormData: true,
-    });
+    try {
+      const res = await hitAxios({
+        path: "/api/content/add_new_product_content",
+        post: true,
+        admin: false,
+        obj: formData,
+        isFormData: true,
+      });
 
-    if (res.data.success) {
-      await fetchContents();
-      handleClose();
+      if (res.data.success) {
+        await fetchContents();
+        handleClose();
+        return;
+      }
+    } finally {
+      submitLockRef.current = false;
+      setState((prev) => ({ ...prev, isSubmitting: false }));
+    }
+  }
+
+  async function handleGeneratePromptRecommendations() {
+    if (state.promptRecommendationLoading) return;
+
+    setState((prev) => ({
+      ...prev,
+      promptRecommendationLoading: true,
+      promptRecommendationError: "",
+    }));
+
+    try {
+      const res = await hitAxios({
+        path: "/api/prompt-recommendation/generate",
+        post: true,
+        admin: false,
+        obj: {
+          type: "product_showcase",
+          source_id: state.selectedModel?.id,
+          context: {
+            modelName: state.selectedModel?.name,
+            productImageName: state.productImage?.name,
+            promptSeed: state.prompt,
+            aspectRatio: state.aspectRatio,
+          },
+        },
+        showLoading: false,
+      });
+
+      if (res?.data?.success) {
+        setState((prev) => ({
+          ...prev,
+          promptRecommendations: res.data.prompts || [],
+          promptRecommendationCredits: res.data.credits,
+        }));
+      } else {
+        setState((prev) => ({
+          ...prev,
+          promptRecommendationError:
+            res?.data?.msg || "Could not generate prompt ideas",
+        }));
+      }
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        promptRecommendationError: "Could not generate prompt ideas",
+      }));
+    } finally {
+      setState((prev) => ({ ...prev, promptRecommendationLoading: false }));
     }
   }
 
   const handleClose = () => {
+    submitLockRef.current = false;
     setState({
       dialog: false,
       step: 0,
@@ -131,6 +209,12 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
       productImagePreview: null,
       prompt: "",
       aspectRatio: "9:16",
+      isSubmitting: false,
+      submissionKey: "",
+      promptRecommendations: [],
+      promptRecommendationLoading: false,
+      promptRecommendationError: "",
+      promptRecommendationCredits: null,
     });
   };
 
@@ -138,7 +222,13 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
     <div>
       <Button
         size="large"
-        onClick={() => setState({ ...state, dialog: true })}
+        onClick={() =>
+          setState({
+            ...state,
+            dialog: true,
+            submissionKey: createSubmissionKey(),
+          })
+        }
         startIcon={<AddOutlined />}
         variant="contained"
       >
@@ -495,6 +585,101 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                 />
               </Box>
 
+              <Box
+                sx={{
+                  mb: 3,
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: alpha(theme.palette.secondary.main, 0.06),
+                  border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`,
+                }}
+              >
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.5}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "stretch", sm: "center" }}
+                >
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={700}>
+                      {lang.recommendedPrompts || "Recommended Prompt Ideas"}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {lang.recommendedPromptsDesc ||
+                        "Generate ready-to-use prompt ideas for this product showcase."}
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={
+                      state.promptRecommendationLoading ? (
+                        <CircularProgress size={16} color="inherit" />
+                      ) : (
+                        <AutoAwesomeOutlined />
+                      )
+                    }
+                    disabled={state.promptRecommendationLoading}
+                    onClick={handleGeneratePromptRecommendations}
+                    sx={{ textTransform: "none", fontWeight: 700 }}
+                  >
+                    {state.promptRecommendationLoading
+                      ? lang.generating || "Generating..."
+                      : lang.generateIdeas || "Generate Ideas"}
+                  </Button>
+                </Stack>
+
+                {state.promptRecommendationError && (
+                  <Alert severity="error" sx={{ mt: 2 }}>
+                    {state.promptRecommendationError}
+                  </Alert>
+                )}
+
+                {state.promptRecommendations.length > 0 && (
+                  <Stack spacing={1.25} sx={{ mt: 2 }}>
+                    {state.promptRecommendationCredits !== null && (
+                      <Typography variant="caption" color="text.secondary">
+                        {lang.creditsUsed || "Credits used"}:{" "}
+                        {state.promptRecommendationCredits}
+                      </Typography>
+                    )}
+                    {state.promptRecommendations.map((item, index) => (
+                      <Box
+                        key={`${item.title}-${index}`}
+                        onClick={() =>
+                          setState((prev) => ({
+                            ...prev,
+                            prompt: item.prompt,
+                          }))
+                        }
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 2,
+                          cursor: "pointer",
+                          bgcolor: theme.palette.background.paper,
+                          border: `1px solid ${theme.palette.divider}`,
+                          "&:hover": {
+                            borderColor: theme.palette.secondary.main,
+                            bgcolor: alpha(theme.palette.secondary.main, 0.04),
+                          },
+                        }}
+                      >
+                        <Typography variant="caption" fontWeight={800}>
+                          {item.title || `${lang.idea || "Idea"} ${index + 1}`}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.5 }}
+                        >
+                          {item.prompt}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+              </Box>
+
               {/* Aspect Ratio Selection */}
               <Box sx={{ mb: 3 }}>
                 <Typography
@@ -634,6 +819,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
             <Button
               onClick={handleClose}
               variant="outlined"
+              disabled={state.isSubmitting}
               sx={{
                 textTransform: "none",
                 fontWeight: 600,
@@ -650,6 +836,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                 <Button
                   onClick={handleBack}
                   variant="outlined"
+                  disabled={state.isSubmitting}
                   startIcon={<ArrowBackOutlined />}
                   sx={{
                     textTransform: "none",
@@ -668,6 +855,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                   onClick={handleNext}
                   variant="contained"
                   disabled={
+                    state.isSubmitting ||
                     (state.step === 0 && !state.selectedModel) ||
                     (state.step === 1 && !state.productImage)
                   }
@@ -693,6 +881,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                   onClick={handleConfirm}
                   variant="contained"
                   color="success"
+                  disabled={state.isSubmitting}
                   sx={{
                     textTransform: "none",
                     fontWeight: 700,
@@ -706,7 +895,9 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                     )}`,
                   }}
                 >
-                  {lang.generateVideo || "Generate Video"}
+                  {state.isSubmitting
+                    ? lang.generating || "Generating..."
+                    : lang.generateVideo || "Generate Video"}
                 </Button>
               )}
             </Box>

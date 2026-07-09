@@ -65,6 +65,10 @@ app.use("/api/insta", require("./routes/insta"));
 app.use("/api/tiktok", require("./routes/tiktok"));
 app.use("/api/talking", require("./routes/talkingVideo"));
 app.use("/api/social-publishing", require("./routes/social-publishing"));
+app.use(
+  "/api/prompt-recommendation",
+  require("./routes/promptRecommendation"),
+);
 
 const publicRoot = path.resolve(__dirname, "./client/public");
 

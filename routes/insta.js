@@ -207,6 +207,153 @@ router.post("/delete-account", validateUser, checkPlan, async (req, res) => {
   }
 });
 
+function maskToken(token = "") {
+  if (!token) return "";
+  if (token.length <= 12) return "****";
+  return `${token.slice(0, 6)}...${token.slice(-4)}`;
+}
+
+async function callInstagramGraph({ pathName, accessToken, params = {}, method = "GET" }) {
+  const { API_VERSION } = require("../utils/insta");
+  const url = new URL(`https://graph.instagram.com/${API_VERSION}/${pathName}`);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+  url.searchParams.set("access_token", accessToken);
+
+  const response = await fetch(url.toString(), { method });
+  const body = await response.json();
+
+  return {
+    ok: response.ok && !body?.error,
+    status: response.status,
+    endpoint: `${url.origin}${url.pathname}`,
+    body,
+    error: body?.error?.message || null,
+  };
+}
+
+// ─── Test linked Instagram account token against Meta Graph API ───────────────
+router.get("/test-account/:accountId", validateUser, checkPlan, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { publish_test_image_url, publish_test_caption } = req.query;
+
+    const [account] = await query(
+      `SELECT id, uid, webhook_id, ig_graph_id, user_id, page_id,
+              username, name, profile_pic, access_token, token_type,
+              expires_in, connected_at, createdAt
+       FROM instagram_accounts
+       WHERE id = ? AND uid = ?`,
+      [accountId, req.decode.uid],
+    );
+
+    if (!account) {
+      return res.json({ success: false, msg: "Instagram account not found" });
+    }
+
+    if (!account.access_token) {
+      return res.json({ success: false, msg: "Instagram access token missing" });
+    }
+
+    const checks = {};
+    checks.basic_profile = await callInstagramGraph({
+      pathName: "me",
+      accessToken: account.access_token,
+      params: {
+        fields:
+          "id,user_id,username,name,profile_picture_url,biography,followers_count,media_count,website",
+      },
+    });
+
+    checks.media_list = await callInstagramGraph({
+      pathName: "me/media",
+      accessToken: account.access_token,
+      params: {
+        fields:
+          "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count",
+        limit: 1,
+      },
+    });
+
+    const firstMediaId = checks.media_list.body?.data?.[0]?.id;
+    checks.comments = firstMediaId
+      ? await callInstagramGraph({
+          pathName: `${firstMediaId}/comments`,
+          accessToken: account.access_token,
+          params: { fields: "id,text,username,timestamp", limit: 1 },
+        })
+      : {
+          ok: true,
+          skipped: true,
+          msg: "No media found to test comments endpoint",
+        };
+
+    checks.conversations = await callInstagramGraph({
+      pathName: "me/conversations",
+      accessToken: account.access_token,
+      params: { platform: "instagram", limit: 1 },
+    });
+
+    checks.subscribed_apps = await callInstagramGraph({
+      pathName: "me/subscribed_apps",
+      accessToken: account.access_token,
+      params: { fields: "subscribed_fields" },
+    });
+
+    if (publish_test_image_url) {
+      checks.content_publish_container = await callInstagramGraph({
+        pathName: `${account.ig_graph_id || "me"}/media`,
+        accessToken: account.access_token,
+        method: "POST",
+        params: {
+          image_url: publish_test_image_url,
+          caption: publish_test_caption || "Instagram API connection test",
+        },
+      });
+      checks.content_publish_container.note =
+        "Container created only. It was not published to Instagram.";
+    } else {
+      checks.content_publish_container = {
+        ok: true,
+        skipped: true,
+        msg: "Pass ?publish_test_image_url=<public-image-url> to test content publish container creation without publishing.",
+      };
+    }
+
+    const failedChecks = Object.entries(checks).filter(([, check]) => !check.ok);
+
+    return res.json({
+      success: failedChecks.length === 0,
+      msg:
+        failedChecks.length === 0
+          ? "Instagram token test passed"
+          : "Instagram token test completed with failures",
+      account: {
+        id: account.id,
+        username: account.username,
+        ig_graph_id: account.ig_graph_id,
+        webhook_id: account.webhook_id,
+        token_type: account.token_type,
+        access_token: maskToken(account.access_token),
+        connected_at: account.connected_at,
+      },
+      checks,
+      failedChecks: failedChecks.map(([name, check]) => ({
+        name,
+        status: check.status,
+        error: check.error || check.msg || "Unknown error",
+      })),
+    });
+  } catch (err) {
+    console.log(err);
+    res.json({ success: false, msg: "Something went wrong", err: err.message });
+  }
+});
+
 router.get("/webhook/:uid", (req, res) => {
   const VERIFY_TOKEN = req.params.uid;
   const {

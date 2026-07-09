@@ -2,7 +2,7 @@
 node_modules
 /client/node_modules
 /client/build
-
+/client/public
 # Sensitive config — contains DB creds, JWT secret, URLs
 config.json
 .env

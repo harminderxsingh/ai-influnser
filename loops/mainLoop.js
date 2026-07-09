@@ -4,6 +4,10 @@ const { runMakeInf } = require("./inf");
 const { runInfVariation } = require("./infVariation");
 const { productShowcase } = require("./productShow");
 const { runTalkingVideo } = require("./talkingVideo");
+const { withJobLock } = require("./jobLock");
+
+const AI_LOOP_LOCK = "extract_ai_main_loop";
+const AI_LOOP_LOCK_SECONDS = 120;
 
 async function getApiKeys() {
   try {
@@ -25,11 +29,13 @@ async function loop() {
       const aiProvider = await getApiKeys();
 
       if (aiProvider) {
-        await runMakeInf({ provider: aiProvider });
-        await runInfVariation({ provider: aiProvider });
-        await runContent({ provider: aiProvider });
-        await productShowcase({ provider: aiProvider });
-        await runTalkingVideo({ provider: aiProvider });
+        await withJobLock(AI_LOOP_LOCK, AI_LOOP_LOCK_SECONDS, async () => {
+          await runMakeInf({ provider: aiProvider });
+          await runInfVariation({ provider: aiProvider });
+          await runContent({ provider: aiProvider });
+          await productShowcase({ provider: aiProvider });
+          await runTalkingVideo({ provider: aiProvider });
+        });
       } else {
         console.log("⚠️  No active provider found, skipping...");
       }

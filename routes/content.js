@@ -165,6 +165,38 @@ router.post(
         }
       }
 
+      const [modelData] = await query(
+        `SELECT * FROM influencers WHERE id = ?`,
+        [model_id],
+      );
+
+      if (!modelData) {
+        return res.json({ msg: "Selected model does not exist", success: false });
+      }
+
+      const modelJson = JSON.stringify(modelData);
+      const promptText = (prompt || "").trim();
+
+      const [recentDuplicate] = await query(
+        `SELECT id FROM product_content
+         WHERE uid = ?
+           AND model = ?
+           AND prompt = ?
+           AND status IN ('processing', 'submitting')
+           AND created_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+         ORDER BY id DESC
+         LIMIT 1`,
+        [uid, modelJson, promptText],
+      );
+
+      if (recentDuplicate) {
+        return res.json({
+          success: true,
+          msg: "The video is already getting ready...",
+          id: recentDuplicate.id,
+        });
+      }
+
       // Upload image
       const uploadResult = await uploadImage(
         req.files.product_image,
@@ -177,39 +209,6 @@ router.post(
         return res.json({
           success: false,
           msg: uploadResult.msg,
-        });
-      }
-
-      // Prepare model JSON
-      const [modelData] = await query(
-        `SELECT * FROM influencers WHERE id = ?`,
-        [model_id],
-      );
-
-      console.log({ model_id });
-
-      if (!modelData) {
-        return res.json({ msg: "Selected model does not exist" });
-      }
-
-      const modelJson = JSON.stringify(modelData);
-      const [recentDuplicate] = await query(
-        `SELECT id FROM product_content
-         WHERE uid = ?
-           AND ref_photo = ?
-           AND prompt = ?
-           AND status IN ('processing', 'submitting')
-           AND created_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
-         ORDER BY id DESC
-         LIMIT 1`,
-        [uid, uploadResult.filename, prompt || ""],
-      );
-
-      if (recentDuplicate) {
-        return res.json({
-          success: true,
-          msg: "The video is already getting ready...",
-          id: recentDuplicate.id,
         });
       }
 
@@ -228,7 +227,7 @@ router.post(
             uid,
             modelJson,
             uploadResult.filename,
-            prompt || "",
+            promptText,
             JSON.stringify(otherData),
             "processing",
             submissionKey,

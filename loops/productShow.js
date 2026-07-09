@@ -13,7 +13,7 @@ const {
   prepareProductImageForShowcase,
 } = require("../utils/showcaseMedia");
 
-const SHOWCASE_STATUS_POLL_SECONDS = 30;
+const SHOWCASE_STATUS_POLL_SECONDS = 45;
 
 // ============================================
 // HELPERS
@@ -110,9 +110,48 @@ async function recoverStaleSubmissions() {
      SET status = 'processing'
      WHERE status = 'submitting'
        AND (job_id IS NULL OR job_id = '')
-       AND updated_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE)`,
+       AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
     [],
   );
+}
+
+async function getFreshRow(id) {
+  const [row] = await query(`SELECT job_id, status FROM product_content WHERE id = ?`, [
+    id,
+  ]);
+  return row || null;
+}
+
+async function persistJobId(id, taskId) {
+  const result = await query(
+    `UPDATE product_content
+     SET status = 'processing', job_id = ?
+     WHERE id = ?
+       AND (job_id IS NULL OR job_id = '')`,
+    [taskId, id],
+  );
+
+  if (result.affectedRows) return { saved: true, duplicate: false };
+
+  const row = await getFreshRow(id);
+  if (row?.job_id) {
+    if (row.status === "submitting") {
+      await query(
+        `UPDATE product_content SET status = 'processing' WHERE id = ? AND status = 'submitting'`,
+        [id],
+      );
+    }
+    return { saved: true, duplicate: row.job_id !== taskId, existingJobId: row.job_id };
+  }
+
+  await query(
+    `UPDATE product_content
+     SET status = 'processing', job_id = ?
+     WHERE id = ?`,
+    [taskId, id],
+  );
+
+  return { saved: true, duplicate: false, forced: true };
 }
 
 async function notifyUser(user, { task, des, status }) {
@@ -450,6 +489,18 @@ async function processProductShowcase(item, provider, fee) {
     return;
   }
 
+  const freshBeforeCreate = await getFreshRow(id);
+  if (freshBeforeCreate?.job_id) {
+    console.log(
+      `⏭️  product_content #${id} already has job_id ${freshBeforeCreate.job_id} before create — skipping duplicate provider call`,
+    );
+    await query(
+      `UPDATE product_content SET status = 'processing' WHERE id = ? AND status = 'submitting'`,
+      [id],
+    );
+    return;
+  }
+
   const create = await createJob(provider, "showcase", {
     image_url_1: modelImageUrl,
     image_url_2: productImageUrl,
@@ -461,6 +512,7 @@ async function processProductShowcase(item, provider, fee) {
   if (create.status === "error") {
     await setContentError(id, create.msg);
     await refundCredits(uid, fee);
+    await releaseProductClaim(id);
     console.error(`❌ product_content #${id} job creation failed:`, create.msg);
 
     const des = `product_content #${id} job creation failed — ${fee} credits refunded. Reason: ${create.msg}`;
@@ -479,37 +531,11 @@ async function processProductShowcase(item, provider, fee) {
     return;
   }
 
-  const saved = await query(
-    `UPDATE product_content
-     SET status = 'processing', job_id = ?
-     WHERE id = ?
-       AND status = 'submitting'
-       AND (job_id IS NULL OR job_id = '')`,
-    [create.taskId, id],
-  );
+  const persisted = await persistJobId(id, create.taskId);
 
-  if (!saved.affectedRows) {
-    const [row] = await query(
-      `SELECT job_id FROM product_content WHERE id = ?`,
-      [id],
-    );
-
-    if (row?.job_id) {
-      await query(
-        `UPDATE product_content
-         SET status = 'processing'
-         WHERE id = ?
-           AND status = 'submitting'`,
-        [id],
-      );
-      console.log(
-        `⚠️  product_content #${id} reconciled submitting → processing`,
-      );
-      return;
-    }
-
+  if (persisted.duplicate && persisted.existingJobId !== create.taskId) {
     console.error(
-      `⚠️  product_content #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
+      `⚠️  product_content #${id} orphan provider job ${create.taskId} — row already has ${persisted.existingJobId}, refunding duplicate charge`,
     );
     await refundCredits(uid, fee);
     return;

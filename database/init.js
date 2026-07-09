@@ -515,7 +515,7 @@ const queries = [
             'fail',
             'data.resultJson.resultUrls[0]'
           );`,
-    check: "SELECT * FROM ai_providers WHERE provider_key='kie_ai';",
+    check: "SELECT * FROM ai_providers WHERE provider_key='kie_ai' OR name='Kie.ai' LIMIT 1;",
   },
   {
     run: "ALTER TABLE `influencers` ADD COLUMN `job_id` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",

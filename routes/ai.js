@@ -3,6 +3,49 @@ const { query } = require("../database/connection.js");
 const adminValidator = require("../middlewares/admin.js");
 
 const FEATURES = ["txt2img", "img2img", "reel", "showcase", "talking"];
+const API_KEY_PLACEHOLDERS = new Set(["", "YOUR_API_KEY", "YOUR_VSK_KEY"]);
+
+function cleanString(value) {
+  return typeof value === "string" ? value.trim() : value;
+}
+
+function isMissingApiKey(value) {
+  return API_KEY_PLACEHOLDERS.has(String(value || "").trim());
+}
+
+function isKieProvider(body, feature) {
+  const name = String(body.name || "").toLowerCase();
+  const baseUrl = String(body[`${feature}_base_url`] || "").toLowerCase();
+
+  return name.includes("kie") || baseUrl.includes("api.kie.ai");
+}
+
+function hasProviderKeyFallback(body, feature) {
+  return isKieProvider(body, feature) && !isMissingApiKey(body.provider_key);
+}
+
+function validateEnabledFeatures(body) {
+  for (const f of FEATURES) {
+    if (!body[`${f}_enabled`]) continue;
+
+    if (!cleanString(body[`${f}_base_url`])) {
+      return `${f} Base URL is required`;
+    }
+
+    if (
+      isMissingApiKey(body[`${f}_api_key`]) &&
+      !hasProviderKeyFallback(body, f)
+    ) {
+      return `${f} API Key is required`;
+    }
+
+    if (!cleanString(body[`${f}_create_endpoint`])) {
+      return `${f} create endpoint is required`;
+    }
+  }
+
+  return null;
+}
 
 function buildFeatureFields(body, forUpdate = false) {
   const cols = [];
@@ -11,15 +54,21 @@ function buildFeatureFields(body, forUpdate = false) {
   FEATURES.forEach((f) => {
     const fields = [
       [`${f}_enabled`, body[`${f}_enabled`] ? 1 : 0],
-      [`${f}_base_url`, body[`${f}_base_url`] || null],
-      [`${f}_api_key`, body[`${f}_api_key`] || null],
-      [`${f}_auth_type`, body[`${f}_auth_type`] || "bearer"],
-      [`${f}_auth_header_key`, body[`${f}_auth_header_key`] || "Authorization"],
-      [`${f}_auth_header_prefix`, body[`${f}_auth_header_prefix`] || "Bearer"],
-      [`${f}_auth_body_key`, body[`${f}_auth_body_key`] || null],
-      [`${f}_auth_query_key`, body[`${f}_auth_query_key`] || null],
-      [`${f}_create_endpoint`, body[`${f}_create_endpoint`] || null],
-      [`${f}_create_method`, body[`${f}_create_method`] || "POST"],
+      [`${f}_base_url`, cleanString(body[`${f}_base_url`]) || null],
+      [`${f}_api_key`, cleanString(body[`${f}_api_key`]) || null],
+      [`${f}_auth_type`, cleanString(body[`${f}_auth_type`]) || "bearer"],
+      [
+        `${f}_auth_header_key`,
+        cleanString(body[`${f}_auth_header_key`]) || "Authorization",
+      ],
+      [
+        `${f}_auth_header_prefix`,
+        cleanString(body[`${f}_auth_header_prefix`]) || "Bearer",
+      ],
+      [`${f}_auth_body_key`, cleanString(body[`${f}_auth_body_key`]) || null],
+      [`${f}_auth_query_key`, cleanString(body[`${f}_auth_query_key`]) || null],
+      [`${f}_create_endpoint`, cleanString(body[`${f}_create_endpoint`]) || null],
+      [`${f}_create_method`, cleanString(body[`${f}_create_method`]) || "POST"],
       [
         `${f}_create_payload`,
         body[`${f}_create_payload`]
@@ -99,6 +148,11 @@ router.post("/add_provider", adminValidator, async (req, res) => {
       });
     }
 
+    const validationError = validateEnabledFeatures(req.body);
+    if (validationError) {
+      return res.json({ success: false, msg: validationError });
+    }
+
     const existing = await query(
       `SELECT id FROM ai_providers WHERE provider_key = ?`,
       [provider_key],
@@ -144,6 +198,11 @@ router.post("/update_provider", adminValidator, async (req, res) => {
       return res.json({ success: false, msg: "Provider ID is required" });
     if (!name?.trim())
       return res.json({ success: false, msg: "Provider Name is required" });
+
+    const validationError = validateEnabledFeatures(req.body);
+    if (validationError) {
+      return res.json({ success: false, msg: validationError });
+    }
 
     const existing = await query(`SELECT id FROM ai_providers WHERE id = ?`, [
       id,

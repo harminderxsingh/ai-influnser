@@ -8,7 +8,7 @@ const { runTalkingVideo } = require("./talkingVideo");
 async function getApiKeys() {
   try {
     const [data] = await query(
-      `SELECT * FROM ai_providers WHERE is_active = ?`,
+      `SELECT * FROM ai_providers WHERE is_active = ? ORDER BY is_default DESC, id ASC LIMIT 1`,
       [1],
     );
     return data || null;

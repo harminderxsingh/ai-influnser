@@ -96,7 +96,6 @@ function getByPath(obj, path) {
 // ============================================
 
 function interpolate(template, variables) {
-  console.error({ template, variables });
   return template.replace(/"?\{\{(\w+)\}\}"?/g, (match, key) => {
     if (variables[key] === undefined) {
       throw new Error(`Missing variable "{{${key}}}" in template`);
@@ -119,17 +118,73 @@ function interpolate(template, variables) {
 // UTILITY: Build auth headers/query/body
 // ============================================
 
+function normalizeAuthType(authType) {
+  switch (authType) {
+    case "custom_header":
+    case "header":
+      return "header";
+    case "query_param":
+    case "query":
+      return "query";
+    case "body":
+      return "body";
+    case "bearer":
+    default:
+      return "bearer";
+  }
+}
+
+function isPlaceholderKey(value) {
+  return new Set(["YOUR_API_KEY", "YOUR_VSK_KEY", ""]).has(
+    String(value || "").trim(),
+  );
+}
+
+function isKieProvider(provider, prefix) {
+  const name = String(provider.name || "").toLowerCase();
+  const baseUrl = String(provider[`${prefix}_base_url`] || "").toLowerCase();
+
+  return name.includes("kie") || baseUrl.includes("api.kie.ai");
+}
+
+function resolveApiKey(provider, prefix) {
+  const featureKey = String(provider[`${prefix}_api_key`] || "").trim();
+  if (!isPlaceholderKey(featureKey)) return featureKey;
+
+  const providerKey = String(provider.provider_key || "").trim();
+  if (isKieProvider(provider, prefix) && !isPlaceholderKey(providerKey)) {
+    return providerKey;
+  }
+
+  return featureKey;
+}
+
+function assertApiKey(provider, prefix, apiKey) {
+  if (isPlaceholderKey(apiKey)) {
+    throw new Error(
+      `Provider "${provider.name}" ${prefix} API key is empty. Add a valid API key in Admin > AI Providers.`,
+    );
+  }
+}
+
 function buildAuth(provider, prefix) {
-  const authType = provider[`${prefix}_auth_type`];
-  const apiKey = provider[`${prefix}_api_key`];
-  const headerKey = provider[`${prefix}_auth_header_key`];
-  const headerPrefix = provider[`${prefix}_auth_header_prefix`];
-  const bodyKey = provider[`${prefix}_auth_body_key`];
-  const queryKey = provider[`${prefix}_auth_query_key`];
+  const authType = normalizeAuthType(provider[`${prefix}_auth_type`]);
+  const apiKey = resolveApiKey(provider, prefix);
+  const headerKey = String(
+    provider[`${prefix}_auth_header_key`] || "Authorization",
+  ).trim();
+  const headerPrefix = String(
+    provider[`${prefix}_auth_header_prefix`] ||
+      (authType === "bearer" ? "Bearer" : ""),
+  ).trim();
+  const bodyKey = String(provider[`${prefix}_auth_body_key`] || "").trim();
+  const queryKey = String(provider[`${prefix}_auth_query_key`] || "").trim();
 
   const headers = {};
   const queryParams = {};
   const bodyParams = {};
+
+  assertApiKey(provider, prefix, apiKey);
 
   if (authType === "bearer" || authType === "header") {
     const value = headerPrefix ? `${headerPrefix} ${apiKey}` : apiKey;
@@ -163,8 +218,6 @@ async function createJob(provider, type, variables = {}) {
     payloadTemplate = JSON.stringify(payloadTemplate);
   }
 
-  console.error({ payloadTemplate: payloadTemplate });
-
   if (!baseUrl || !endpoint) {
     return {
       status: "error",
@@ -185,7 +238,17 @@ async function createJob(provider, type, variables = {}) {
     }
   }
 
-  const { headers, queryParams, bodyParams } = buildAuth(provider, type);
+  let auth;
+  try {
+    auth = buildAuth(provider, type);
+  } catch (err) {
+    return {
+      status: "error",
+      msg: err.message,
+    };
+  }
+
+  const { headers, queryParams, bodyParams } = auth;
 
   if (Object.keys(bodyParams).length > 0) {
     payload = { ...payload, ...bodyParams };
@@ -257,7 +320,17 @@ async function fetchJobStatus(provider, type, taskId) {
     encodeURIComponent(taskId),
   );
 
-  const { headers, queryParams } = buildAuth(provider, type);
+  let auth;
+  try {
+    auth = buildAuth(provider, type);
+  } catch (err) {
+    return {
+      status: "error",
+      msg: err.message,
+    };
+  }
+
+  const { headers, queryParams } = auth;
   const url = `${baseUrl}${endpoint}`;
 
   try {

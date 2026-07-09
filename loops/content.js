@@ -83,7 +83,7 @@ async function touchContentStatusCheck(id) {
     `UPDATE content
      SET updated_at = NOW()
      WHERE id = ?
-       AND status = 'processing'
+       AND status IN ('processing', 'submitting')
        AND job_id IS NOT NULL
        AND job_id <> ''`,
     [id],
@@ -91,6 +91,15 @@ async function touchContentStatusCheck(id) {
 }
 
 async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE content
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [],
+  );
+
   await query(
     `UPDATE content
      SET status = 'processing'
@@ -460,6 +469,20 @@ async function processContent(item, provider, fee) {
   );
 
   if (!saved.affectedRows) {
+    const [row] = await query(`SELECT job_id FROM content WHERE id = ?`, [id]);
+
+    if (row?.job_id) {
+      await query(
+        `UPDATE content
+         SET status = 'processing'
+         WHERE id = ?
+           AND status = 'submitting'`,
+        [id],
+      );
+      console.log(`⚠️  content #${id} reconciled submitting → processing`);
+      return;
+    }
+
     console.error(
       `⚠️  content #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
     );
@@ -501,7 +524,11 @@ async function runContent({ provider }) {
 
     const contentList = await query(
       `SELECT * FROM content
-       WHERE status = 'processing'
+       WHERE status IN ('processing', 'submitting')
+         AND NOT (
+           status = 'submitting'
+           AND (job_id IS NULL OR job_id = '')
+         )
          AND (
            job_id IS NULL
            OR job_id = ''

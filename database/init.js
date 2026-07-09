@@ -1202,6 +1202,14 @@ const queries = [
     check:
       "SHOW INDEX FROM `talking_content` WHERE Key_name = 'uniq_talking_submission';",
   },
+  {
+    run: `UPDATE ai_providers
+      SET showcase_create_payload = '{"prompt":"{{text}}","imageUrls":["{{image_url_1}}","{{image_url_2}}"],"model":"veo3_fast","generationType":"{{generation_type}}","aspect_ratio":"{{aspect_ratio}}","enableTranslation":true}'
+      WHERE provider_key = 'kie_ai'
+        AND showcase_create_endpoint LIKE '%veo%'`,
+    check:
+      "SELECT id FROM ai_providers WHERE provider_key='kie_ai' AND showcase_create_payload LIKE '%aspect_ratio%' LIMIT 1;",
+  },
 ];
 
 const initDatabase = async () => {

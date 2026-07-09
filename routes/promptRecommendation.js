@@ -48,7 +48,7 @@ function productShowcasePrompts(context = {}) {
   return [
     {
       title: "Natural Product Demo",
-      prompt: `${modelName} presents ${productName} in a natural, friendly way. Show the product clearly, highlight the main benefit, and end with a confident recommendation.${seedLine} Make the video polished, realistic, and suitable for ${aspectRatio}.`,
+      prompt: `${modelName} presents ${productName} in a natural, friendly way. Show the product clearly in hand, highlight the main benefit, and end with a sharp close-up of the product packaging.${seedLine} Keep the product crisp and readable, suitable for ${aspectRatio}.`,
     },
     {
       title: "Problem Solution Hook",

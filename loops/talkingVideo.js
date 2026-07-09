@@ -83,7 +83,7 @@ async function touchTalkingStatusCheck(id) {
     `UPDATE talking_content
      SET updated_at = NOW()
      WHERE id = ?
-       AND status = 'processing'
+       AND status IN ('processing', 'submitting')
        AND job_id IS NOT NULL
        AND job_id <> ''`,
     [id],
@@ -91,6 +91,15 @@ async function touchTalkingStatusCheck(id) {
 }
 
 async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE talking_content
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [],
+  );
+
   await query(
     `UPDATE talking_content
      SET status = 'processing'
@@ -435,6 +444,24 @@ async function processTalkingContent(item, provider, fee) {
   );
 
   if (!saved.affectedRows) {
+    const [row] = await query(`SELECT job_id FROM talking_content WHERE id = ?`, [
+      id,
+    ]);
+
+    if (row?.job_id) {
+      await query(
+        `UPDATE talking_content
+         SET status = 'processing'
+         WHERE id = ?
+           AND status = 'submitting'`,
+        [id],
+      );
+      console.log(
+        `⚠️  talking_content #${id} reconciled submitting → processing`,
+      );
+      return;
+    }
+
     console.error(
       `⚠️  talking_content #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
     );
@@ -481,7 +508,11 @@ async function runTalkingVideo({ provider }) {
 
     const contentList = await query(
       `SELECT * FROM talking_content
-       WHERE status = 'processing'
+       WHERE status IN ('processing', 'submitting')
+         AND NOT (
+           status = 'submitting'
+           AND (job_id IS NULL OR job_id = '')
+         )
          AND (
            job_id IS NULL
            OR job_id = ''

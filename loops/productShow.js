@@ -7,6 +7,11 @@ const {
 } = require("../utils/common");
 const { fetchJobStatus, createJob } = require("./api");
 const { frontendUrl } = require("../config.json");
+const {
+  buildShowcasePrompt,
+  normalizeAspectRatio,
+  prepareProductImageForShowcase,
+} = require("../utils/showcaseMedia");
 
 const SHOWCASE_STATUS_POLL_SECONDS = 30;
 
@@ -83,7 +88,7 @@ async function touchProductStatusCheck(id) {
     `UPDATE product_content
      SET updated_at = NOW()
      WHERE id = ?
-       AND status = 'processing'
+       AND status IN ('processing', 'submitting')
        AND job_id IS NOT NULL
        AND job_id <> ''`,
     [id],
@@ -91,6 +96,15 @@ async function touchProductStatusCheck(id) {
 }
 
 async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE product_content
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [],
+  );
+
   await query(
     `UPDATE product_content
      SET status = 'processing'
@@ -136,7 +150,7 @@ async function uploadFileToProvider(localPath, _apiKey) {
 // ============================================
 
 async function processProductShowcase(item, provider, fee) {
-  const { id, uid, job_id, model, ref_photo, prompt } = item;
+  const { id, uid, job_id, model, ref_photo, prompt, other } = item;
 
   if (job_id) {
     let result;
@@ -374,6 +388,14 @@ async function processProductShowcase(item, provider, fee) {
     provider.img2img_api_key ||
     provider.txt2img_api_key;
 
+  let aspectRatio = "9:16";
+  try {
+    const otherData = typeof other === "string" ? JSON.parse(other) : other;
+    aspectRatio = normalizeAspectRatio(otherData?.aspect_ratio);
+  } catch {
+    aspectRatio = "9:16";
+  }
+
   let modelImageUrl;
   try {
     const modelImagePath = `${__dirname}/../client/public/media/${influencer.photo_url}`;
@@ -393,9 +415,13 @@ async function processProductShowcase(item, provider, fee) {
   let productImageUrl;
   try {
     const productImagePath = `${__dirname}/../client/public/media/${ref_photo}`;
-    productImageUrl = await uploadFileToProvider(productImagePath, apiKey);
+    const preparedProductPath = await prepareProductImageForShowcase(
+      productImagePath,
+      aspectRatio,
+    );
+    productImageUrl = await uploadFileToProvider(preparedProductPath, apiKey);
     console.log(
-      `📎 product_content #${id} product image URL: ${productImageUrl}`,
+      `📎 product_content #${id} product image URL: ${productImageUrl} (${aspectRatio})`,
     );
   } catch (err) {
     await setContentError(id, `Product image upload failed: ${err.message}`);
@@ -427,7 +453,9 @@ async function processProductShowcase(item, provider, fee) {
   const create = await createJob(provider, "showcase", {
     image_url_1: modelImageUrl,
     image_url_2: productImageUrl,
-    text: prompt,
+    text: buildShowcasePrompt(prompt),
+    aspect_ratio: aspectRatio,
+    generation_type: "REFERENCE_2_VIDEO",
   });
 
   if (create.status === "error") {
@@ -461,6 +489,25 @@ async function processProductShowcase(item, provider, fee) {
   );
 
   if (!saved.affectedRows) {
+    const [row] = await query(
+      `SELECT job_id FROM product_content WHERE id = ?`,
+      [id],
+    );
+
+    if (row?.job_id) {
+      await query(
+        `UPDATE product_content
+         SET status = 'processing'
+         WHERE id = ?
+           AND status = 'submitting'`,
+        [id],
+      );
+      console.log(
+        `⚠️  product_content #${id} reconciled submitting → processing`,
+      );
+      return;
+    }
+
     console.error(
       `⚠️  product_content #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
     );
@@ -504,7 +551,11 @@ async function productShowcase({ provider }) {
 
     const contentList = await query(
       `SELECT * FROM product_content
-       WHERE status = 'processing'
+       WHERE status IN ('processing', 'submitting')
+         AND NOT (
+           status = 'submitting'
+           AND (job_id IS NULL OR job_id = '')
+         )
          AND (
            job_id IS NULL
            OR job_id = ''

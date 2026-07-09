@@ -83,7 +83,7 @@ async function touchGalleryStatusCheck(id) {
     `UPDATE gallery
      SET updated_at = NOW()
      WHERE id = ?
-       AND status = 'processing'
+       AND status IN ('processing', 'submitting')
        AND job_id IS NOT NULL
        AND job_id <> ''`,
     [id],
@@ -91,6 +91,15 @@ async function touchGalleryStatusCheck(id) {
 }
 
 async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE gallery
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [],
+  );
+
   await query(
     `UPDATE gallery
      SET status = 'processing'
@@ -418,6 +427,20 @@ async function processVariation(item, provider, fee) {
   );
 
   if (!saved.affectedRows) {
+    const [row] = await query(`SELECT job_id FROM gallery WHERE id = ?`, [id]);
+
+    if (row?.job_id) {
+      await query(
+        `UPDATE gallery
+         SET status = 'processing'
+         WHERE id = ?
+           AND status = 'submitting'`,
+        [id],
+      );
+      console.log(`⚠️  gallery #${id} reconciled submitting → processing`);
+      return;
+    }
+
     console.error(
       `⚠️  gallery #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
     );
@@ -459,7 +482,11 @@ async function runInfVariation({ provider }) {
 
     const galleryList = await query(
       `SELECT * FROM gallery
-       WHERE status = 'processing'
+       WHERE status IN ('processing', 'submitting')
+         AND NOT (
+           status = 'submitting'
+           AND (job_id IS NULL OR job_id = '')
+         )
          AND (
            job_id IS NULL
            OR job_id = ''

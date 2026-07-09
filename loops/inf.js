@@ -81,7 +81,7 @@ async function touchInfluencerStatusCheck(id) {
     `UPDATE influencers
      SET updated_at = NOW()
      WHERE id = ?
-       AND status = 'processing'
+       AND status IN ('processing', 'submitting')
        AND job_id IS NOT NULL
        AND job_id <> ''`,
     [id],
@@ -89,6 +89,15 @@ async function touchInfluencerStatusCheck(id) {
 }
 
 async function recoverStaleSubmissions() {
+  await query(
+    `UPDATE influencers
+     SET status = 'processing'
+     WHERE status = 'submitting'
+       AND job_id IS NOT NULL
+       AND job_id <> ''`,
+    [],
+  );
+
   await query(
     `UPDATE influencers
      SET status = 'processing'
@@ -362,6 +371,24 @@ async function processInfluencer(inf, provider, fee) {
   );
 
   if (!saved.affectedRows) {
+    const [row] = await query(`SELECT job_id, status FROM influencers WHERE id = ?`, [
+      id,
+    ]);
+
+    if (row?.job_id) {
+      await query(
+        `UPDATE influencers
+         SET status = 'processing'
+         WHERE id = ?
+           AND status = 'submitting'`,
+        [id],
+      );
+      console.log(
+        `⚠️  inf #${id} reconciled submitting → processing (job_id ${row.job_id} already set)`,
+      );
+      return;
+    }
+
     console.error(
       `⚠️  inf #${id} job ${create.taskId} created but row already has a job_id - refunding duplicate charge`,
     );
@@ -401,7 +428,11 @@ async function runMakeInf({ provider }) {
 
     const infList = await query(
       `SELECT * FROM influencers
-       WHERE status = 'processing'
+       WHERE status IN ('processing', 'submitting')
+         AND NOT (
+           status = 'submitting'
+           AND (job_id IS NULL OR job_id = '')
+         )
          AND (
            job_id IS NULL
            OR job_id = ''

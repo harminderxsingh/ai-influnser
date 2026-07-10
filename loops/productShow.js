@@ -397,6 +397,13 @@ async function processProductShowcase(item, provider, fee) {
       otherData.auto_influencer_job_id = job_id;
       otherData.auto_stage = "showcase";
       await saveOtherAndJob(id, otherData, null, "processing");
+
+      const [freshItem] = await query(`SELECT * FROM product_content WHERE id = ?`, [
+        id,
+      ]);
+      if (freshItem) {
+        await processProductShowcase(freshItem, provider, fee);
+      }
       return;
     }
 

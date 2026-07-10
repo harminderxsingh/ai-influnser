@@ -362,6 +362,151 @@ async function uploadFileToProvider(localPath, _apiKey) {
   return publicUrl;
 }
 
+async function submitShowcaseVideoJob(item, provider, fee, otherData, influencer) {
+  const { id, uid, ref_photo, prompt } = item;
+
+  const freshBeforeCreate = await getFreshRow(id);
+  if (freshBeforeCreate?.job_id) {
+    console.log(
+      `⏭️  product_content #${id} already has job_id ${freshBeforeCreate.job_id} before showcase create`,
+    );
+    return;
+  }
+
+  const apiKey =
+    provider.reel_api_key ||
+    provider.img2img_api_key ||
+    provider.txt2img_api_key;
+
+  let aspectRatio = "9:16";
+  try {
+    aspectRatio = normalizeAspectRatio(otherData?.aspect_ratio);
+  } catch {
+    aspectRatio = "9:16";
+  }
+
+  let modelImageUrl;
+  try {
+    const modelImagePath = `${__dirname}/../client/public/media/${influencer.photo_url}`;
+    modelImageUrl = await uploadFileToProvider(modelImagePath, apiKey);
+    console.log(`📎 product_content #${id} model image URL: ${modelImageUrl}`);
+  } catch (err) {
+    await setContentError(id, `Model image upload failed: ${err.message}`);
+    await logUsage({
+      uid,
+      task: "product_showcase_maker",
+      status: "error",
+      des: `product_content #${id} — model image upload failed: ${err.message}`,
+    });
+    return;
+  }
+
+  let productImageUrl;
+  try {
+    const productImagePath = `${__dirname}/../client/public/media/${ref_photo}`;
+    const preparedProductPath = await prepareProductImageForShowcase(
+      productImagePath,
+      aspectRatio,
+    );
+    productImageUrl = await uploadFileToProvider(preparedProductPath, apiKey);
+    console.log(
+      `📎 product_content #${id} product image URL: ${productImageUrl} (${aspectRatio})`,
+    );
+  } catch (err) {
+    await setContentError(id, `Product image upload failed: ${err.message}`);
+    await logUsage({
+      uid,
+      task: "product_showcase_maker",
+      status: "error",
+      des: `product_content #${id} — product image upload failed: ${err.message}`,
+    });
+    return;
+  }
+
+  const reserved = otherData.credits_reserved
+    ? true
+    : await reserveCredits(uid, fee);
+
+  if (!reserved) {
+    console.log(
+      `⏭️  Skipping product_content #${id} — credits taken by concurrent task`,
+    );
+    await releaseProductClaim(id);
+    await logUsage({
+      uid,
+      task: "product_showcase_maker",
+      status: "skipped",
+      des: `product_content #${id} skipped — credits taken by a concurrent task`,
+    });
+    return;
+  }
+
+  otherData.credits_reserved = true;
+  otherData.auto_stage = otherData.influencer_mode === "auto"
+    ? "showcase_video"
+    : otherData.auto_stage;
+  await saveOtherAndJob(id, otherData, null, "submitting");
+
+  const finalPrompt =
+    otherData.influencer_mode === "auto"
+      ? otherData.vision_analysis
+        ? buildAutoShowcasePrompt(otherData.vision_analysis, prompt)
+        : buildSelectedShowcasePrompt(prompt)
+      : buildSelectedShowcasePrompt(prompt);
+
+  const create = await createJob(provider, "showcase", {
+    image_url_1: modelImageUrl,
+    image_url_2: productImageUrl,
+    text: finalPrompt,
+    aspect_ratio: aspectRatio,
+    generation_type: "REFERENCE_2_VIDEO",
+  });
+
+  if (create.status === "error") {
+    await setContentError(id, create.msg);
+    await refundCredits(uid, fee);
+    await releaseProductClaim(id);
+    console.error(`❌ product_content #${id} showcase job creation failed:`, create.msg);
+
+    const user = await getUser(uid);
+    const des = `product_content #${id} showcase job creation failed — ${fee} credits refunded. Reason: ${create.msg}`;
+    await logUsage({
+      uid,
+      task: "product_showcase_maker",
+      credits: fee,
+      status: "refunded",
+      des,
+    });
+    await notifyUser(user, {
+      task: "Product Showcase Video",
+      des,
+      status: "Refunded",
+    });
+    return;
+  }
+
+  const persisted = await persistJobId(id, create.taskId);
+
+  if (persisted.duplicate && persisted.existingJobId !== create.taskId) {
+    console.error(
+      `⚠️  product_content #${id} orphan showcase job ${create.taskId} — row already has ${persisted.existingJobId}, refunding duplicate charge`,
+    );
+    await refundCredits(uid, fee);
+    return;
+  }
+
+  console.log(
+    `🚀 product_content #${id} showcase video job created — taskId: ${create.taskId}`,
+  );
+  await logUsage({
+    uid,
+    task: "product_showcase_maker",
+    credits: fee,
+    status: "processing",
+    des: `product_content #${id} showcase video job submitted — taskId: ${create.taskId}`,
+  });
+}
+
 // ============================================
 // PROCESS SINGLE PRODUCT CONTENT ITEM
 // ============================================
@@ -450,13 +595,16 @@ async function processProductShowcase(item, provider, fee) {
       otherData.auto_influencer_job_id = job_id;
       otherData.auto_stage = "showcase";
       await saveOtherAndJob(id, otherData, null, "processing");
-
-      const [freshItem] = await query(`SELECT * FROM product_content WHERE id = ?`, [
-        id,
-      ]);
-      if (freshItem) {
-        await processProductShowcase(freshItem, provider, fee);
-      }
+      await submitShowcaseVideoJob(
+        { ...item, job_id: null },
+        provider,
+        fee,
+        otherData,
+        {
+          name: "Auto AI Influencer",
+          photo_url: savedInfluencerPhoto,
+        },
+      );
       return;
     }
 
@@ -766,9 +914,8 @@ async function processProductShowcase(item, provider, fee) {
       name: "Auto AI Influencer",
       photo_url: otherData.auto_influencer_photo,
     };
-    finalPrompt = otherData.vision_analysis
-      ? buildAutoShowcasePrompt(otherData.vision_analysis, prompt)
-      : buildSelectedShowcasePrompt(prompt);
+    await submitShowcaseVideoJob(item, provider, fee, otherData, influencer);
+    return;
   } else {
     influencer = storedInfluencer;
 

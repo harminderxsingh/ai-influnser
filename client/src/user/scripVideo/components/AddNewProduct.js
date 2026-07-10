@@ -163,24 +163,32 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
     }));
 
     try {
+      const context = {
+        modelName:
+          state.influencerMode === "select"
+            ? state.selectedModel?.name
+            : "Auto-created influencer",
+        productImageName: state.productImage?.name,
+        promptSeed: state.prompt,
+        aspectRatio: state.aspectRatio,
+      };
+      const formData = new FormData();
+      formData.append("type", "product_showcase");
+      formData.append(
+        "source_id",
+        state.influencerMode === "select" ? state.selectedModel?.id || "" : "",
+      );
+      formData.append("context", JSON.stringify(context));
+      if (state.productImage) {
+        formData.append("product_image", state.productImage);
+      }
+
       const res = await hitAxios({
         path: "/api/prompt-recommendation/generate",
         post: true,
         admin: false,
-        obj: {
-          type: "product_showcase",
-          source_id:
-            state.influencerMode === "select" ? state.selectedModel?.id : null,
-          context: {
-            modelName:
-              state.influencerMode === "select"
-                ? state.selectedModel?.name
-                : "Auto-created influencer",
-            productImageName: state.productImage?.name,
-            promptSeed: state.prompt,
-            aspectRatio: state.aspectRatio,
-          },
-        },
+        obj: formData,
+        isFormData: true,
         showLoading: false,
       });
 

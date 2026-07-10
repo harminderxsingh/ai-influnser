@@ -1,9 +1,12 @@
 const express = require("express");
 const router = express.Router();
+const path = require("path");
 const { query } = require("../database/connection");
 const validateUser = require("../middlewares/user");
 const { checkPlan } = require("../middlewares/common");
-const { logUsage } = require("../utils/common");
+const { logUsage, uploadImage } = require("../utils/common");
+const { analyzeProductImage } = require("../loops/api");
+const { frontendUrl } = require("../config.json");
 
 const VALID_TYPES = new Set(["product_showcase", "influencer"]);
 
@@ -27,6 +30,14 @@ async function refundCredits(uid, fee) {
   ]);
 }
 
+async function getActiveProvider() {
+  const [provider] = await query(
+    `SELECT * FROM ai_providers WHERE is_active = ? ORDER BY is_default DESC, id ASC LIMIT 1`,
+    [1],
+  );
+  return provider || null;
+}
+
 function cleanText(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
@@ -35,12 +46,31 @@ function compactPrompt(value) {
   return cleanText(value).replace(/\s+/g, " ");
 }
 
+function cleanProductName(value, fallback = "the product") {
+  const raw = cleanText(value, fallback);
+  const withoutExt = raw.replace(/\.[a-z0-9]{2,5}$/i, "");
+  if (/^(image|images|img|photo|picture|product)[-_ ]?\d*$/i.test(withoutExt)) {
+    return fallback;
+  }
+  return withoutExt.replace(/[-_]+/g, " ").trim() || fallback;
+}
+
 function productShowcasePrompts(context = {}) {
   const modelName = cleanText(context.modelName, "the influencer");
-  const productName = cleanText(
+  const analysis = context.visionAnalysis || {};
+  const productName = cleanProductName(
     context.productName,
-    cleanText(context.productImageName, "the product"),
+    cleanText(
+      analysis.product_name || analysis.product_type,
+      cleanProductName(context.productImageName, "the product"),
+    ),
   );
+  const productDescription = cleanText(analysis.product_description);
+  const audience = cleanText(analysis.target_audience);
+  const productLine = productDescription
+    ? ` Product details: ${productDescription}.`
+    : "";
+  const audienceLine = audience ? ` Target audience: ${audience}.` : "";
   const aspectRatio = cleanText(context.aspectRatio, "9:16");
   const seed = compactPrompt(context.promptSeed);
   const seedLine = seed ? ` Keep this direction in mind: ${seed}` : "";
@@ -48,23 +78,23 @@ function productShowcasePrompts(context = {}) {
   return [
     {
       title: "Natural Product Demo",
-      prompt: `${modelName} presents ${productName} in a natural, friendly way. Show the product clearly in hand, highlight the main benefit, and end with a sharp close-up of the product packaging.${seedLine} Keep the product crisp and readable, suitable for ${aspectRatio}.`,
+      prompt: `${modelName} presents ${productName} in a natural, friendly way. Show the product clearly in hand, highlight the main benefit, and end with a sharp close-up.${productLine}${audienceLine}${seedLine} Keep the product crisp, accurate, and suitable for ${aspectRatio}.`,
     },
     {
       title: "Problem Solution Hook",
-      prompt: `${modelName} starts by mentioning a common customer problem, then shows how ${productName} solves it. Keep the delivery simple, trustworthy, and focused on why viewers should try it.${seedLine}`,
+      prompt: `${modelName} starts by mentioning a common customer problem, then shows how ${productName} solves it or improves the look/lifestyle of the buyer.${productLine}${seedLine} Keep the delivery simple, trustworthy, and focused on why viewers should try it.`,
     },
     {
       title: "Premium Lifestyle Ad",
-      prompt: `${modelName} showcases ${productName} like a premium lifestyle ad. Use confident body language, clean product framing, elegant pacing, and a clear call to action.${seedLine}`,
+      prompt: `${modelName} showcases ${productName} like a premium lifestyle ad. Use confident body language, clean product framing, elegant pacing, and a clear call to action.${productLine}${seedLine}`,
     },
     {
       title: "Social Proof Style",
-      prompt: `${modelName} talks about ${productName} as if recommending it to a friend after using it. Mention the product naturally, explain the key advantage, and make the scene feel authentic.${seedLine}`,
+      prompt: `${modelName} talks about ${productName} as if recommending it to a friend after using it. Mention the product naturally, explain the key advantage, and make the scene feel authentic.${productLine}${seedLine}`,
     },
     {
       title: "Short Viral Pitch",
-      prompt: `${modelName} gives a short viral-style pitch for ${productName}. Start with a strong hook, show the product, mention one memorable benefit, and finish with an energetic call to action.${seedLine}`,
+      prompt: `${modelName} gives a short viral-style pitch for ${productName}. Start with a strong hook, show the product, mention one memorable benefit, and finish with an energetic call to action.${productLine}${seedLine}`,
     },
   ];
 }
@@ -107,7 +137,16 @@ function buildRecommendations(type, context) {
 
 router.post("/generate", validateUser, checkPlan, async (req, res) => {
   const uid = req.decode.uid;
-  const { type, source_id, context = {} } = req.body || {};
+  const { type, source_id } = req.body || {};
+  let context = req.body?.context || {};
+
+  if (typeof context === "string") {
+    try {
+      context = JSON.parse(context);
+    } catch {
+      context = {};
+    }
+  }
 
   if (!VALID_TYPES.has(type)) {
     return res.json({
@@ -142,6 +181,37 @@ router.post("/generate", validateUser, checkPlan, async (req, res) => {
   }
 
   try {
+    if (type === "product_showcase" && req.files?.product_image) {
+      const uploadResult = await uploadImage(
+        req.files.product_image,
+        path.join(__dirname, "../client/public/media"),
+        ["jpeg", "jpg", "png", "webp"],
+        10,
+      );
+
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.msg || "Product image upload failed");
+      }
+
+      const provider = await getActiveProvider();
+      if (!provider) {
+        throw new Error("No active AI provider configured for vision analysis");
+      }
+
+      const productImageUrl = `${frontendUrl}/media/${uploadResult.filename}`;
+      const vision = await analyzeProductImage(provider, productImageUrl);
+      if (vision.status === "error") {
+        throw new Error(`Vision analysis failed: ${vision.msg}`);
+      }
+
+      context = {
+        ...context,
+        productImageUrl,
+        productImageName: req.files.product_image.name,
+        visionAnalysis: vision.data,
+      };
+    }
+
     const prompts = buildRecommendations(type, context);
     if (!prompts.length) {
       throw new Error("No prompt recommendations could be generated");

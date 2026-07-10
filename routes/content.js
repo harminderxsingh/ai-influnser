@@ -285,6 +285,25 @@ router.get(
   checkPlan,
   async (req, res) => {
     try {
+      await query(
+        `UPDATE product_content
+         SET status = 'processing', error_message = NULL
+         WHERE uid = ?
+           AND status = 'error'
+           AND error_message = 'Influencer has no photo'
+           AND (
+             model IS NULL
+             OR model = ''
+             OR model = 'null'
+             OR model = '{}'
+             OR other LIKE '%"auto_mode":true%'
+             OR other LIKE '%"auto_mode":1%'
+             OR other LIKE '%"auto_mode":"true"%'
+             OR other LIKE '%"influencer_mode":"auto"%'
+           )`,
+        [req.decode.uid],
+      );
+
       const data = await query(
         `SELECT * FROM product_content WHERE uid = ? ORDER BY created_at DESC`,
         [req.decode.uid],

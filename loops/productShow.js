@@ -29,6 +29,17 @@ async function getCreditFee() {
   return parseInt(web?.product_showcase_maker || 0);
 }
 
+async function getActiveProvider() {
+  const [provider] = await query(
+    `SELECT * FROM ai_providers
+     WHERE is_active = ?
+     ORDER BY is_default DESC, id ASC
+     LIMIT 1`,
+    [1],
+  );
+  return provider || null;
+}
+
 function getUserCredits(user) {
   try {
     return parseInt(user?.credits) || 0;
@@ -891,4 +902,78 @@ async function productShowcase({ provider }) {
   }
 }
 
-module.exports = { productShowcase };
+async function triggerProductShowcase(id) {
+  try {
+    const provider = await getActiveProvider();
+    if (!provider) {
+      await logUsage({
+        task: "product_showcase_maker",
+        status: "skipped",
+        des: `product_content #${id} skipped — no active AI provider found`,
+      });
+      return { success: false, msg: "No active AI provider found" };
+    }
+
+    const fee = await getCreditFee();
+    if (fee < 1) {
+      await logUsage({
+        task: "product_showcase_maker",
+        status: "skipped",
+        des: `product_content #${id} skipped — product_showcase_maker fee not configured`,
+      });
+      return {
+        success: false,
+        msg: "Product showcase credit fee is not configured",
+      };
+    }
+
+    const [item] = await query(`SELECT * FROM product_content WHERE id = ?`, [
+      id,
+    ]);
+    if (!item) return { success: false, msg: "Product content not found" };
+    if (!["processing", "submitting"].includes(item.status)) {
+      return {
+        success: item.status !== "error",
+        msg: item.error_message || "Product content is not ready to process",
+        status: item.status,
+        job_id: item.job_id,
+      };
+    }
+
+    await processProductShowcase(item, provider, fee);
+
+    const [fresh] = await query(
+      `SELECT id, status, job_id, error_message FROM product_content WHERE id = ?`,
+      [id],
+    );
+
+    if (fresh?.status === "error") {
+      return {
+        success: false,
+        msg: fresh.error_message || "Could not start product showcase",
+        status: fresh.status,
+        job_id: fresh.job_id,
+      };
+    }
+
+    return {
+      success: true,
+      msg: "Product showcase processing started",
+      status: fresh?.status,
+      job_id: fresh?.job_id,
+    };
+  } catch (err) {
+    console.error(
+      `❌ triggerProductShowcase failed for product_content #${id}:`,
+      err.message,
+    );
+    await logUsage({
+      task: "product_showcase_maker",
+      status: "error",
+      des: `triggerProductShowcase failed for product_content #${id}: ${err.message}`,
+    });
+    return { success: false, msg: err.message };
+  }
+}
+
+module.exports = { productShowcase, triggerProductShowcase };

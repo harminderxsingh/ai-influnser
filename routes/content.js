@@ -6,6 +6,7 @@ const { checkPlan } = require("../middlewares/common");
 const { uploadImage, deleteFile } = require("../utils/common");
 const path = require("path");
 const { normalizeSubmissionKey } = require("../utils/submissionKey");
+const { triggerProductShowcase } = require("../loops/productShow");
 
 // add content
 router.post("/add_new", validateUser, checkPlan, async (req, res) => {
@@ -156,10 +157,21 @@ router.post(
         );
 
         if (existing) {
+          const triggerResult = await triggerProductShowcase(existing.id);
+          if (!triggerResult.success) {
+            return res.json({
+              success: false,
+              msg: triggerResult.msg,
+              id: existing.id,
+            });
+          }
+
           return res.json({
             success: true,
             msg: "The video is already getting ready...",
             id: existing.id,
+            job_id: triggerResult.job_id,
+            status: triggerResult.status,
           });
         }
       }
@@ -201,10 +213,21 @@ router.post(
         );
 
         if (recentDuplicate) {
+          const triggerResult = await triggerProductShowcase(recentDuplicate.id);
+          if (!triggerResult.success) {
+            return res.json({
+              success: false,
+              msg: triggerResult.msg,
+              id: recentDuplicate.id,
+            });
+          }
+
           return res.json({
             success: true,
             msg: "The video is already getting ready...",
             id: recentDuplicate.id,
+            job_id: triggerResult.job_id,
+            status: triggerResult.status,
           });
         }
       }
@@ -234,8 +257,9 @@ router.post(
       };
 
       // Insert into database
+      let insertResult;
       try {
-        await query(
+        insertResult = await query(
           `INSERT INTO product_content
             (uid, model, ref_photo, prompt, other, status, submission_key)
            VALUES (?,?,?,?,?,?,?)`,
@@ -256,17 +280,46 @@ router.post(
             [uid, submissionKey],
           );
 
+          let triggerResult = null;
+          if (existing?.id) {
+            triggerResult = await triggerProductShowcase(existing.id);
+            if (!triggerResult.success) {
+              return res.json({
+                success: false,
+                msg: triggerResult.msg,
+                id: existing.id,
+              });
+            }
+          }
+
           return res.json({
             success: true,
             msg: "The video is already getting ready...",
             id: existing?.id,
+            job_id: triggerResult?.job_id,
+            status: triggerResult?.status,
           });
         }
 
         throw insertErr;
       }
 
-      res.json({ success: true, msg: "The video is getting ready..." });
+      const triggerResult = await triggerProductShowcase(insertResult.insertId);
+      if (!triggerResult.success) {
+        return res.json({
+          success: false,
+          msg: triggerResult.msg,
+          id: insertResult.insertId,
+        });
+      }
+
+      res.json({
+        success: true,
+        msg: "The video is getting ready...",
+        id: insertResult.insertId,
+        job_id: triggerResult.job_id,
+        status: triggerResult.status,
+      });
     } catch (err) {
       console.error("Add product content error:", err);
       res.json({

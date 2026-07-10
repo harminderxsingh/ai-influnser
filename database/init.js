@@ -1300,6 +1300,16 @@ const queries = [
     check: "SHOW COLUMNS FROM `web_public` LIKE 'google_login_id';",
     runWhenExists: true,
   },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `offline_payment_html`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'offline_payment_html';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `offline_payment_active`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'offline_payment_active';",
+    runWhenExists: true,
+  },
 ];
 
 const initDatabase = async () => {

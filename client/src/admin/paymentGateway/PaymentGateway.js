@@ -24,7 +24,6 @@ import {
   VisibilityOutlined,
   VisibilityOffOutlined,
   PaymentOutlined,
-  ReceiptLongOutlined,
 } from "@mui/icons-material";
 import { GlobalContext } from "../../context/GlobalContext";
 import PageHeader from "../../common/PageHeader";
@@ -294,49 +293,6 @@ const PaymentGateway = ({ lang }) => {
                   value={state?.pay_paypal_key}
                   onChange={set}
                   name="pay_paypal_key"
-                />
-              </Stack>
-            </SectionCard>
-
-            <SectionCard
-              icon={ReceiptLongOutlined}
-              title={lang?.offlinePayment || "Offline Payment"}
-            >
-              <Stack spacing={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={state?.offline_payment_active === 1}
-                      onChange={(e) =>
-                        set(
-                          "offline_payment_active",
-                          e.target.checked ? 1 : 0,
-                        )
-                      }
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableOfflinePayment || "Enable Offline Payment"}
-                    </Typography>
-                  }
-                />
-                <Divider />
-                <TextField
-                  fullWidth
-                  multiline
-                  minRows={6}
-                  size="small"
-                  label={lang?.offlinePaymentHtml || "Offline Payment HTML"}
-                  placeholder={
-                    lang?.offlinePaymentHtmlHint ||
-                    "Bank details, UPI, or payment instructions"
-                  }
-                  value={state?.offline_payment_html || ""}
-                  onChange={(e) =>
-                    set("offline_payment_html", e.target.value)
-                  }
                 />
               </Stack>
             </SectionCard>

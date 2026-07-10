@@ -21,7 +21,6 @@ import FooterComp from "../components/FooterComp";
 import PayPalComp from "./gateways/PayPalComp";
 import RazorpayComp from "./gateways/RazorpayComp";
 import Free from "./gateways/Free";
-import OfflineCheckout from "./gateways/OfflineCheckout"; // ← new
 
 // ── maps gateway key → component ─────────────────────────────────────────────
 const GATEWAY_COMPONENTS = {
@@ -43,8 +42,6 @@ const CheckOut = () => {
 
   const [plan, setPlan] = React.useState(null);
   const [gateways, setGateways] = React.useState({});
-  const [offlineHtml, setOfflineHtml] = React.useState(""); // ← new
-  const [offlineActive, setOfflineActive] = React.useState(false); // ← new
   const [paying, setPaying] = React.useState("");
   const [done, setDone] = React.useState(false);
   const [loadingCheckout, setLoadingCheckout] = React.useState(true);
@@ -59,7 +56,7 @@ const CheckOut = () => {
       setLoadingCheckout(true);
       setCheckoutError("");
       try {
-        const [planRes, gwRes, offlineRes] = await Promise.all([
+        const [planRes, gwRes] = await Promise.all([
           hitAxiosRef.current({
             path:
               productType === "credit_package"
@@ -76,13 +73,6 @@ const CheckOut = () => {
             post: false,
             showLoading: false,
           }),
-          hitAxiosRef.current({
-            // ← new
-            path: "/api/payment/offline-details",
-            admin: false,
-            post: false,
-            showLoading: false,
-          }),
         ]);
 
         if (planRes?.data?.success) {
@@ -93,11 +83,6 @@ const CheckOut = () => {
           );
         }
         if (gwRes?.data?.success) setGateways(gwRes.data.data);
-        if (offlineRes?.data?.success) {
-          // ← new
-          setOfflineHtml(offlineRes.data.html || "");
-          setOfflineActive(!!offlineRes.data.active);
-        }
       } finally {
         setLoadingCheckout(false);
       }
@@ -298,8 +283,7 @@ const CheckOut = () => {
                     {lang?.selectPayment || "Select Payment Method"}
                   </Typography>
 
-                  {activeGateways.length === 0 &&
-                    !(productType === "plan" && offlineActive) && (
+                  {activeGateways.length === 0 && (
                     <Typography variant="body2" color="text.secondary">
                       {lang?.noGateways ||
                         "No payment methods available at the moment."}
@@ -330,18 +314,6 @@ const CheckOut = () => {
                           />
                         );
                       })}
-
-                      {/* ── OFFLINE PAYMENT ── */}
-                      {productType === "plan" && offlineActive && offlineHtml && (
-                        <OfflineCheckout
-                          plan={plan}
-                          currency={currency}
-                          html={offlineHtml}
-                          paying={paying}
-                          setPaying={setPaying}
-                          lang={lang}
-                        />
-                      )}
                     </>
                   )}
                 </Stack>

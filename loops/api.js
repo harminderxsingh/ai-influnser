@@ -431,6 +431,93 @@ async function fetchJobStatus(provider, type, taskId) {
   }
 }
 
+function safeParseJsonText(value) {
+  if (!value || typeof value !== "string") return null;
+
+  const cleaned = value
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function analyzeProductImage(provider, imageUrl) {
+  let apiKey;
+  try {
+    apiKey = resolveApiKey(provider, "showcase");
+    assertApiKey(provider, "showcase", apiKey);
+  } catch {
+    apiKey = resolveApiKey(provider, "txt2img");
+    assertApiKey(provider, "txt2img", apiKey);
+  }
+
+  try {
+    const response = await axios({
+      method: "post",
+      url: "https://api.kie.ai/gemini-2.5-pro/v1/chat/completions",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      timeout: 45000,
+      data: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text:
+                  "Analyze this product image for an AI UGC ad. Return only valid JSON with keys: product_type, product_name, product_description, target_audience, influencer_prompt, ad_prompt. The influencer_prompt must describe a photorealistic human influencer suitable for promoting the product. The ad_prompt must describe an 8 second product showcase ad where the influencer naturally presents the exact product with sharp packaging and accurate colors.",
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: imageUrl,
+                },
+              },
+            ],
+          },
+        ],
+        temperature: 0.2,
+      },
+    });
+
+    const content =
+      response.data?.choices?.[0]?.message?.content ||
+      response.data?.choices?.[0]?.delta?.content ||
+      response.data?.data?.choices?.[0]?.message?.content;
+    const parsed = safeParseJsonText(content);
+
+    if (!parsed) {
+      return {
+        status: "error",
+        msg: `Vision response was not valid JSON: ${safeStringify(response.data)}`,
+      };
+    }
+
+    return { status: "success", data: parsed };
+  } catch (err) {
+    return {
+      status: "error",
+      msg: normalizeError(err).message,
+    };
+  }
+}
+
 // ============================================
 // UTILITY: Normalize any error to readable string
 // ============================================
@@ -473,6 +560,7 @@ function safeStringify(obj) {
 module.exports = {
   createJob,
   fetchJobStatus,
+  analyzeProductImage,
   getByPath,
   interpolate,
 };

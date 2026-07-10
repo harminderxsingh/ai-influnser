@@ -49,6 +49,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
   const [state, setState] = React.useState({
     dialog: false,
     step: 0,
+    influencerMode: "auto",
     selectedModel: null,
     productImage: null,
     productImagePreview: null,
@@ -65,9 +66,9 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
   const theme = useTheme();
 
   const steps = [
-    lang.selectModel || "Select Model",
+    lang.influencer || "Influencer",
     lang.uploadProduct || "Upload Product",
-    lang.addPrompt || "Add Prompt",
+    lang.addPrompt || "Style & Settings",
   ];
 
   const aspectRatios = [
@@ -104,7 +105,8 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
 
   const handleNext = () => {
     if (
-      (state.step === 0 && state.selectedModel) ||
+      (state.step === 0 &&
+        (state.influencerMode === "auto" || state.selectedModel)) ||
       (state.step === 1 && state.productImage)
     ) {
       setState({ ...state, step: state.step + 1 });
@@ -122,8 +124,10 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
     setState((prev) => ({ ...prev, isSubmitting: true }));
 
     const formData = new FormData();
-    formData.append("model_id", state.selectedModel.id);
-    formData.append("model_name", state.selectedModel.name);
+    if (state.influencerMode === "select" && state.selectedModel) {
+      formData.append("model_id", state.selectedModel.id);
+      formData.append("model_name", state.selectedModel.name);
+    }
     formData.append("product_image", state.productImage);
     formData.append("prompt", state.prompt);
     formData.append("aspect_ratio", state.aspectRatio);
@@ -165,9 +169,13 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
         admin: false,
         obj: {
           type: "product_showcase",
-          source_id: state.selectedModel?.id,
+          source_id:
+            state.influencerMode === "select" ? state.selectedModel?.id : null,
           context: {
-            modelName: state.selectedModel?.name,
+            modelName:
+              state.influencerMode === "select"
+                ? state.selectedModel?.name
+                : "Auto-created influencer",
             productImageName: state.productImage?.name,
             promptSeed: state.prompt,
             aspectRatio: state.aspectRatio,
@@ -204,6 +212,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
     setState({
       dialog: false,
       step: 0,
+      influencerMode: "auto",
       selectedModel: null,
       productImage: null,
       productImagePreview: null,
@@ -238,10 +247,10 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
       <CommonDialog
         title={
           state.step === 0
-            ? lang.selectModel || "Select Model"
+            ? lang.influencer || "Influencer"
             : state.step === 1
               ? lang.uploadProduct || "Upload Product"
-              : lang.addPrompt || "Add Prompt & Settings"
+              : lang.addPrompt || "Style & Settings"
         }
         open={state.dialog}
         onClose={handleClose}
@@ -278,31 +287,76 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
           {/* Step 0: Select Model */}
           {state.step === 0 && (
             <>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
+                  {lang.influencerMode || "Influencer Mode"}
+                </Typography>
+                <ToggleButtonGroup
+                  value={state.influencerMode}
+                  exclusive
+                  onChange={(e, value) => {
+                    if (value) {
+                      setState({
+                        ...state,
+                        influencerMode: value,
+                        selectedModel:
+                          value === "auto" ? null : state.selectedModel,
+                      });
+                    }
+                  }}
+                  fullWidth
+                  sx={{
+                    "& .MuiToggleButton-root": {
+                      py: 1.5,
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontWeight: 700,
+                    },
+                  }}
+                >
+                  <ToggleButton value="auto">
+                    {lang.autoCreateInfluencer || "Auto Create Influencer"}
+                  </ToggleButton>
+                  <ToggleButton value="select">
+                    {lang.selectInfluencer || "Select Influencer"}
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
               {/* Info Banner */}
               <PageHeader
                 icon={Face2}
-                title={lang.chooseYourModel || "Choose Your Model"}
+                title={
+                  state.influencerMode === "auto"
+                    ? lang.autoCreateInfluencer || "Auto Create Influencer"
+                    : lang.chooseYourModel || "Choose Your Model"
+                }
                 subtitle={
-                  lang.selectModelDescription ||
-                  "Select the influencer to showcase your product"
+                  state.influencerMode === "auto"
+                    ? lang.autoCreateInfluencerDesc ||
+                      "AI will analyze the product image and create a matching influencer automatically."
+                    : lang.selectModelDescription ||
+                      "Select the influencer to showcase your product"
                 }
               />
 
               {/* Model Grid */}
-              <Grid container spacing={2.5}>
-                {inf.map((model) => (
-                  <Grid item xs={6} sm={4} md={3} key={model.id}>
-                    <ModelCard
-                      model={model}
-                      isSelected={state.selectedModel?.id === model.id}
-                      onSelect={() => handleSelectModel(model)}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              {state.influencerMode === "select" && (
+                <Grid container spacing={2.5}>
+                  {inf.map((model) => (
+                    <Grid item xs={6} sm={4} md={3} key={model.id}>
+                      <ModelCard
+                        model={model}
+                        isSelected={state.selectedModel?.id === model.id}
+                        onSelect={() => handleSelectModel(model)}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
 
               {/* Selected Info */}
-              {state.selectedModel && (
+              {state.influencerMode === "select" && state.selectedModel && (
                 <Box
                   sx={{
                     mt: 3,
@@ -353,6 +407,13 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                     </Typography>
                   </Box>
                 </Box>
+              )}
+
+              {state.influencerMode === "auto" && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  {lang.autoInfluencerVisionNote ||
+                    "Vision AI will detect the product and write a matching influencer + ad prompt automatically."}
+                </Alert>
               )}
             </>
           )}
@@ -551,7 +612,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                       }}
                     >
                       {lang.promptDescription ||
-                        "Describe what the model should say or do (8 seconds video)"}
+                        "Optional: add a direction for the ad. If left blank, AI will analyze the product and write the prompt automatically."}
                     </Typography>
                   </Box>
                 </Stack>
@@ -571,7 +632,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                   rows={4}
                   placeholder={
                     lang.promptPlaceholder ||
-                    'e.g., "This product is amazing! It changed my life. You should definitely try it!"'
+                    'Optional e.g., "Make it luxury fashion style with a confident hook"'
                   }
                   value={state.prompt}
                   onChange={(e) =>
@@ -778,7 +839,10 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                     <PersonOutlined fontSize="small" color="action" />
                     <Typography variant="body2">
                       <strong>{lang.model || "Model"}:</strong>{" "}
-                      {state.selectedModel?.name}
+                      {state.influencerMode === "select"
+                        ? state.selectedModel?.name
+                        : lang.autoCreatedInfluencer ||
+                          "Auto-created influencer"}
                     </Typography>
                   </Box>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -856,7 +920,9 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                   variant="contained"
                   disabled={
                     state.isSubmitting ||
-                    (state.step === 0 && !state.selectedModel) ||
+                    (state.step === 0 &&
+                      state.influencerMode === "select" &&
+                      !state.selectedModel) ||
                     (state.step === 1 && !state.productImage)
                   }
                   endIcon={<ArrowForwardOutlined />}
@@ -868,7 +934,9 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                     py: 1,
                     borderRadius: 2,
                     boxShadow:
-                      (state.step === 0 && state.selectedModel) ||
+                      (state.step === 0 &&
+                        (state.influencerMode === "auto" ||
+                          state.selectedModel)) ||
                       (state.step === 1 && state.productImage)
                         ? `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`
                         : "none",

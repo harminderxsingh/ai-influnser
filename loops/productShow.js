@@ -5,7 +5,7 @@ const {
   logUsage,
   sendUsageUpdateEmail,
 } = require("../utils/common");
-const { fetchJobStatus, createJob } = require("./api");
+const { fetchJobStatus, createJob, analyzeProductImage } = require("./api");
 const { frontendUrl } = require("../config.json");
 const {
   buildShowcasePrompt,
@@ -152,6 +152,48 @@ async function persistJobId(id, taskId) {
   );
 
   return { saved: true, duplicate: false, forced: true };
+}
+
+function parseOther(raw) {
+  if (!raw) return {};
+  if (typeof raw === "object") return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+async function saveOther(id, otherData, status = "processing") {
+  await query(
+    `UPDATE product_content
+     SET other = ?, status = ?
+     WHERE id = ?`,
+    [JSON.stringify(otherData), status, id],
+  );
+}
+
+function buildAutoInfluencerPrompt(analysis = {}) {
+  const productType = analysis.product_type || "product";
+  const audience = analysis.target_audience || "modern online shoppers";
+  const style =
+    analysis.influencer_prompt ||
+    `A photorealistic lifestyle influencer suitable for promoting a ${productType}`;
+
+  return `${style}. The influencer should look trustworthy, polished, brand-safe, and natural for ${audience}. Professional studio ad photography, detailed face, realistic hands, clean outfit, sharp focus, premium social media campaign style.`;
+}
+
+function buildAutoShowcasePrompt(analysis = {}, userPrompt = "") {
+  const base = userPrompt?.trim() || analysis.ad_prompt || "";
+  const productName =
+    analysis.product_name || analysis.product_type || "the uploaded product";
+  const description = analysis.product_description
+    ? ` Product details: ${analysis.product_description}.`
+    : "";
+
+  return buildShowcasePrompt(
+    `${base || `Create a realistic UGC ad where the influencer presents ${productName}.`}${description}`,
+  );
 }
 
 async function notifyUser(user, { task, des, status }) {
@@ -375,31 +417,6 @@ async function processProductShowcase(item, provider, fee) {
     return;
   }
 
-  let influencer;
-  try {
-    influencer = typeof model === "string" ? JSON.parse(model) : model;
-  } catch (err) {
-    await setContentError(id, "Invalid model JSON");
-    await logUsage({
-      uid,
-      task: "product_showcase_maker",
-      status: "error",
-      des: `product_content #${id} — failed to parse model JSON: ${err.message}`,
-    });
-    return;
-  }
-
-  if (!influencer?.photo_url) {
-    await setContentError(id, "Influencer has no photo");
-    await logUsage({
-      uid,
-      task: "product_showcase_maker",
-      status: "error",
-      des: `product_content #${id} — influencer has no photo_url`,
-    });
-    return;
-  }
-
   if (!ref_photo) {
     await setContentError(id, "No product photo found");
     await logUsage({
@@ -411,15 +428,151 @@ async function processProductShowcase(item, provider, fee) {
     return;
   }
 
-  if (!prompt) {
-    await setContentError(id, "No prompt provided");
-    await logUsage({
-      uid,
-      task: "product_showcase_maker",
-      status: "error",
-      des: `product_content #${id} — prompt is empty`,
-    });
-    return;
+  const otherData = parseOther(other);
+  const isAutoProductFlow = otherData.auto_mode || !model;
+
+  let influencer;
+  let finalPrompt = prompt;
+
+  if (isAutoProductFlow) {
+    const productImagePath = `${__dirname}/../client/public/media/${ref_photo}`;
+    const productImageUrlForVision = await uploadFileToProvider(
+      productImagePath,
+    );
+
+    if (!otherData.credits_reserved) {
+      const reserved = await reserveCredits(uid, fee);
+
+      if (!reserved) {
+        console.log(
+          `⏭️  Skipping product_content #${id} — credits taken by concurrent task`,
+        );
+        await releaseProductClaim(id);
+        await logUsage({
+          uid,
+          task: "product_showcase_maker",
+          status: "skipped",
+          des: `product_content #${id} skipped — credits taken by a concurrent task`,
+        });
+        return;
+      }
+
+      otherData.credits_reserved = true;
+      await saveOther(id, otherData, "processing");
+    }
+
+    if (!otherData.vision_analysis) {
+      const vision = await analyzeProductImage(provider, productImageUrlForVision);
+      if (vision.status === "error") {
+        await refundCredits(uid, fee);
+        await setContentError(id, `Product vision analysis failed: ${vision.msg}`);
+        await logUsage({
+          uid,
+          task: "product_showcase_maker",
+          credits: fee,
+          status: "refunded",
+          des: `product_content #${id} vision analysis failed — ${fee}cr refunded. Reason: ${vision.msg}`,
+        });
+        return;
+      }
+
+      otherData.vision_analysis = vision.data;
+      await saveOther(id, otherData, "processing");
+      return;
+    }
+
+    if (!otherData.auto_influencer_photo) {
+      if (otherData.auto_influencer_job_id) {
+        const result = await fetchJobStatus(
+          provider,
+          "txt2img",
+          otherData.auto_influencer_job_id,
+        );
+
+        if (result.status === "pending") {
+          await saveOther(id, otherData, "processing");
+          return;
+        }
+
+        if (result.status === "error") {
+          await refundCredits(uid, fee);
+          await setContentError(
+            id,
+            `Auto influencer generation failed: ${result.msg}`,
+          );
+          await logUsage({
+            uid,
+            task: "product_showcase_maker",
+            credits: fee,
+            status: "refunded",
+            des: `product_content #${id} auto influencer failed — ${fee}cr refunded. Reason: ${result.msg}`,
+          });
+          return;
+        }
+
+        const savedInfluencerPhoto = await downloadImage(
+          result.data,
+          `${__dirname}/../client/public/media`,
+        );
+        otherData.auto_influencer_photo = savedInfluencerPhoto;
+        await saveOther(id, otherData, "processing");
+        return;
+      }
+
+      const createInfluencer = await createJob(provider, "txt2img", {
+        prompt: buildAutoInfluencerPrompt(otherData.vision_analysis),
+      });
+
+      if (createInfluencer.status === "error") {
+        await refundCredits(uid, fee);
+        await setContentError(
+          id,
+          `Auto influencer job creation failed: ${createInfluencer.msg}`,
+        );
+        await logUsage({
+          uid,
+          task: "product_showcase_maker",
+          credits: fee,
+          status: "refunded",
+          des: `product_content #${id} auto influencer create failed — ${fee}cr refunded. Reason: ${createInfluencer.msg}`,
+        });
+        return;
+      }
+
+      otherData.auto_influencer_job_id = createInfluencer.taskId;
+      await saveOther(id, otherData, "processing");
+      return;
+    }
+
+    influencer = {
+      name: "Auto AI Influencer",
+      photo_url: otherData.auto_influencer_photo,
+    };
+    finalPrompt = buildAutoShowcasePrompt(otherData.vision_analysis, prompt);
+  } else {
+    try {
+      influencer = typeof model === "string" ? JSON.parse(model) : model;
+    } catch (err) {
+      await setContentError(id, "Invalid model JSON");
+      await logUsage({
+        uid,
+        task: "product_showcase_maker",
+        status: "error",
+        des: `product_content #${id} — failed to parse model JSON: ${err.message}`,
+      });
+      return;
+    }
+
+    if (!influencer?.photo_url) {
+      await setContentError(id, "Influencer has no photo");
+      await logUsage({
+        uid,
+        task: "product_showcase_maker",
+        status: "error",
+        des: `product_content #${id} — influencer has no photo_url`,
+      });
+      return;
+    }
   }
 
   const apiKey =
@@ -429,7 +582,6 @@ async function processProductShowcase(item, provider, fee) {
 
   let aspectRatio = "9:16";
   try {
-    const otherData = typeof other === "string" ? JSON.parse(other) : other;
     aspectRatio = normalizeAspectRatio(otherData?.aspect_ratio);
   } catch {
     aspectRatio = "9:16";
@@ -473,7 +625,9 @@ async function processProductShowcase(item, provider, fee) {
     return;
   }
 
-  const reserved = await reserveCredits(uid, fee);
+  const reserved = otherData.credits_reserved
+    ? true
+    : await reserveCredits(uid, fee);
 
   if (!reserved) {
     console.log(
@@ -486,6 +640,31 @@ async function processProductShowcase(item, provider, fee) {
       status: "skipped",
       des: `product_content #${id} skipped — credits taken by a concurrent task`,
     });
+    return;
+  }
+
+  if (!otherData.credits_reserved) {
+    otherData.credits_reserved = true;
+    await saveOther(id, otherData, "submitting");
+  }
+
+  if (!otherData.vision_analysis) {
+    const vision = await analyzeProductImage(provider, productImageUrl);
+    if (vision.status === "error") {
+      await refundCredits(uid, fee);
+      await setContentError(id, `Product vision analysis failed: ${vision.msg}`);
+      await logUsage({
+        uid,
+        task: "product_showcase_maker",
+        credits: fee,
+        status: "refunded",
+        des: `product_content #${id} vision analysis failed — ${fee}cr refunded. Reason: ${vision.msg}`,
+      });
+      return;
+    }
+
+    otherData.vision_analysis = vision.data;
+    await saveOther(id, otherData, "processing");
     return;
   }
 
@@ -504,7 +683,7 @@ async function processProductShowcase(item, provider, fee) {
   const create = await createJob(provider, "showcase", {
     image_url_1: modelImageUrl,
     image_url_2: productImageUrl,
-    text: buildShowcasePrompt(prompt),
+    text: buildAutoShowcasePrompt(otherData.vision_analysis, finalPrompt),
     aspect_ratio: aspectRatio,
     generation_type: "REFERENCE_2_VIDEO",
   });
@@ -583,9 +762,15 @@ async function productShowcase({ provider }) {
            AND (job_id IS NULL OR job_id = '')
          )
          AND (
-           job_id IS NULL
-           OR job_id = ''
-           OR updated_at < DATE_SUB(NOW(), INTERVAL ${SHOWCASE_STATUS_POLL_SECONDS} SECOND)
+           (
+             (job_id IS NULL OR job_id = '')
+             AND updated_at < DATE_SUB(NOW(), INTERVAL 10 SECOND)
+           )
+           OR (
+             job_id IS NOT NULL
+             AND job_id <> ''
+             AND updated_at < DATE_SUB(NOW(), INTERVAL ${SHOWCASE_STATUS_POLL_SECONDS} SECOND)
+           )
          )`,
     );
 

@@ -135,14 +135,6 @@ router.post(
       const submissionKey = normalizeSubmissionKey(submission_key);
       const uid = req.decode.uid;
 
-      // Validation
-      if (!model_id || !model_name) {
-        return res.json({
-          msg: "Please select a model",
-          success: false,
-        });
-      }
-
       if (!req.files || !req.files.product_image) {
         return res.json({
           msg: "Please upload a product image",
@@ -165,36 +157,43 @@ router.post(
         }
       }
 
-      const [modelData] = await query(
-        `SELECT * FROM influencers WHERE id = ?`,
-        [model_id],
-      );
+      let modelData = null;
+      if (model_id) {
+        [modelData] = await query(`SELECT * FROM influencers WHERE id = ?`, [
+          model_id,
+        ]);
 
-      if (!modelData) {
-        return res.json({ msg: "Selected model does not exist", success: false });
+        if (!modelData) {
+          return res.json({
+            msg: "Selected model does not exist",
+            success: false,
+          });
+        }
       }
 
-      const modelJson = JSON.stringify(modelData);
+      const modelJson = modelData ? JSON.stringify(modelData) : null;
       const promptText = (prompt || "").trim();
 
-      const [recentDuplicate] = await query(
-        `SELECT id FROM product_content
-         WHERE uid = ?
-           AND model = ?
-           AND prompt = ?
-           AND status IN ('processing', 'submitting')
-           AND created_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
-         ORDER BY id DESC
-         LIMIT 1`,
-        [uid, modelJson, promptText],
-      );
+      if (modelData) {
+        const [recentDuplicate] = await query(
+          `SELECT id FROM product_content
+           WHERE uid = ?
+             AND model = ?
+             AND prompt = ?
+             AND status IN ('processing', 'submitting')
+             AND created_at > DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+           ORDER BY id DESC
+           LIMIT 1`,
+          [uid, modelJson, promptText],
+        );
 
-      if (recentDuplicate) {
-        return res.json({
-          success: true,
-          msg: "The video is already getting ready...",
-          id: recentDuplicate.id,
-        });
+        if (recentDuplicate) {
+          return res.json({
+            success: true,
+            msg: "The video is already getting ready...",
+            id: recentDuplicate.id,
+          });
+        }
       }
 
       // Upload image
@@ -215,6 +214,9 @@ router.post(
       // Prepare other data JSON
       const otherData = {
         aspect_ratio: aspect_ratio || "9:16",
+        auto_mode: !modelData,
+        product_image_name: req.files.product_image.name,
+        user_prompt: promptText,
       };
 
       // Insert into database

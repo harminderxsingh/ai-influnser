@@ -7,7 +7,6 @@ import TopBar from "./TopBar";
 import Content from "./Content";
 import {
   Dashboard as DashboardIcon,
-  Face2,
   Collections,
   SlowMotionVideo,
   EmergencyRecording,
@@ -15,15 +14,12 @@ import {
   HistoryToggleOff,
   NotificationsActive,
   Logout,
-  Instagram,
-  Campaign,
   VideoCameraFront,
   TokenOutlined,
   GroupAddOutlined,
 } from "@mui/icons-material";
 import { UserProvider } from "../../context/UserContext";
 import { GlobalContext } from "../../context/GlobalContext";
-import TikTokIcon from "../../common/TikTokIcon";
 
 const drawerWidth = 240;
 
@@ -50,26 +46,6 @@ const UserDashboard = () => {
       text: lang?.dashboards || "Dashboards",
       icon: <DashboardIcon />,
       // submenu: [{ id: "dashboard", text: lang?.dashboard || "Dashboard" }],
-    },
-    {
-      id: "influencers",
-      text: lang?.influencers || "Influencers",
-      icon: <Face2 />,
-    },
-    {
-      id: "link-instagram",
-      text: lang?.linkInsta || "Link Instagram",
-      icon: <Instagram />,
-    },
-    {
-      id: "link-tiktok",
-      text: lang?.linkTiktok || "Link TIktok",
-      icon: <TikTokIcon />,
-    },
-    {
-      id: "social-publishing",
-      text: lang?.socialPublishing || "Social Publishing",
-      icon: <Campaign />,
     },
     {
       id: "social-publishing-history",

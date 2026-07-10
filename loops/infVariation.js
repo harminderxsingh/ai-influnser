@@ -391,17 +391,25 @@ async function processVariation(item, provider, fee) {
     return;
   }
 
-  const create = await createJob(provider, "img2img", {
-    prompt,
-    reference_url: referenceUrl,
+  await logUsage({
+    uid,
+    task: "inf_var_maker",
+    credits: fee,
+    status: "debited",
+    des: `gallery #${id} — ${fee} credits debited from wallet for influencer variation generation`,
   });
 
-  if (create.status === "error") {
-    await setGalleryError(id, create.msg);
+  let create;
+  try {
+    create = await createJob(provider, "img2img", {
+      prompt,
+      reference_url: referenceUrl,
+    });
+  } catch (err) {
     await refundCredits(uid, fee);
-    console.error(`❌ gallery #${id} job creation failed:`, create.msg);
+    await setGalleryError(id, `Job creation crashed: ${err.message}`);
 
-    const des = `gallery #${id} job creation failed — ${fee} credits refunded. Reason: ${create.msg}`;
+    const des = `gallery #${id} job creation crashed — ${fee} credits refunded to wallet. Reason: ${err.message}`;
     await logUsage({
       uid,
       task: "inf_var_maker",
@@ -417,14 +425,56 @@ async function processVariation(item, provider, fee) {
     return;
   }
 
-  const saved = await query(
-    `UPDATE gallery
-     SET status = 'processing', job_id = ?
-     WHERE id = ?
-       AND status = 'submitting'
-       AND (job_id IS NULL OR job_id = '')`,
-    [create.taskId, id],
-  );
+  if (create.status === "error") {
+    await setGalleryError(id, create.msg);
+    await refundCredits(uid, fee);
+    console.error(`❌ gallery #${id} job creation failed:`, create.msg);
+
+    const des = `gallery #${id} job creation failed — ${fee} credits refunded to wallet. Reason: ${create.msg}`;
+    await logUsage({
+      uid,
+      task: "inf_var_maker",
+      credits: fee,
+      status: "refunded",
+      des,
+    });
+    await notifyUser(user, {
+      task: "Influencer Variation",
+      des,
+      status: "Refunded",
+    });
+    return;
+  }
+
+  let saved;
+  try {
+    saved = await query(
+      `UPDATE gallery
+       SET status = 'processing', job_id = ?
+       WHERE id = ?
+         AND status = 'submitting'
+         AND (job_id IS NULL OR job_id = '')`,
+      [create.taskId, id],
+    );
+  } catch (err) {
+    await refundCredits(uid, fee);
+    await setGalleryError(id, `Could not save provider job id: ${err.message}`);
+
+    const des = `gallery #${id} job_id save failed after provider create — ${fee} credits refunded to wallet. Provider taskId: ${create.taskId}. Reason: ${err.message}`;
+    await logUsage({
+      uid,
+      task: "inf_var_maker",
+      credits: fee,
+      status: "refunded",
+      des,
+    });
+    await notifyUser(user, {
+      task: "Influencer Variation",
+      des,
+      status: "Refunded",
+    });
+    return;
+  }
 
   if (!saved.affectedRows) {
     const [row] = await query(`SELECT job_id FROM gallery WHERE id = ?`, [id]);
@@ -445,6 +495,20 @@ async function processVariation(item, provider, fee) {
       `⚠️  gallery #${id} job ${create.taskId} created but row already has a job_id — refunding duplicate charge`,
     );
     await refundCredits(uid, fee);
+
+    const des = `gallery #${id} duplicate provider job created — ${fee} credits refunded to wallet. Duplicate taskId: ${create.taskId}`;
+    await logUsage({
+      uid,
+      task: "inf_var_maker",
+      credits: fee,
+      status: "refunded",
+      des,
+    });
+    await notifyUser(user, {
+      task: "Influencer Variation",
+      des,
+      status: "Refunded",
+    });
     return;
   }
 

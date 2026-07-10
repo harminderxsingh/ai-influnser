@@ -733,7 +733,7 @@ const AppContent = () => {
             : c.background_default_dark || "#000000"
         }
       >
-        <CircularProgress />
+        <CircularProgress sx={{ color: "text.primary" }} />
       </Box>
     );
   }

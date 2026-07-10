@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useCallback } from "react";
 import {
+  detectCountryCode,
   formatPrice as formatPriceUtil,
   convertUsdPrice,
 } from "../utils/currency";
@@ -15,30 +16,50 @@ export const useCurrency = () => {
 };
 
 export const CurrencyProvider = ({ children }) => {
-  const currency = {
-    symbol: "$",
-    code: "USD",
-    rate: 1,
-    base: "USD",
-    country: "US",
-  };
+  const [country, setCountryState] = React.useState(detectCountryCode);
+
+  const currency = React.useMemo(() => {
+    if (country === "IN") {
+      return {
+        symbol: "₹",
+        code: "INR",
+        rate: 85,
+        base: "USD",
+        country: "IN",
+      };
+    }
+
+    return {
+      symbol: "$",
+      code: "USD",
+      rate: 1,
+      base: "USD",
+      country: country || "US",
+    };
+  }, [country]);
+
+  const setCountry = useCallback((code) => {
+    const nextCountry = String(code || "US").toUpperCase();
+    localStorage.setItem("country_code", nextCountry);
+    setCountryState(nextCountry);
+  }, []);
 
   const formatPrice = useCallback(
     (usdAmount) => formatPriceUtil(usdAmount, currency),
-    [],
+    [currency],
   );
 
   const convertPrice = useCallback(
     (usdAmount) => convertUsdPrice(usdAmount, currency),
-    [],
+    [currency],
   );
 
   return (
     <CurrencyContext.Provider
       value={{
         currency,
-        country: "US",
-        setCountry: () => {},
+        country,
+        setCountry,
         formatPrice,
         convertPrice,
         ready: true,

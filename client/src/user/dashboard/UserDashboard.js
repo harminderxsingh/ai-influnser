@@ -15,7 +15,6 @@ import {
   HistoryToggleOff,
   NotificationsActive,
   Logout,
-  VideoCameraFront,
   TokenOutlined,
   GroupAddOutlined,
 } from "@mui/icons-material";
@@ -67,11 +66,6 @@ const UserDashboard = () => {
       id: "content",
       text: lang?.content || "Content",
       icon: <SlowMotionVideo />,
-    },
-    {
-      id: "talking-video",
-      text: lang?.talkingVideo || "Talking Video",
-      icon: <VideoCameraFront />,
     },
     {
       id: "script-to-video",

@@ -11,14 +11,37 @@ const crypto = require("crypto");
 const { MercadoPagoConfig, Preference, Payment } = require("mercadopago");
 const payuCallbackParser = express.urlencoded({ extended: false, type: "*/*" });
 
-// Prices are stored, displayed, and charged in USD.
+function detectCountry(req = null) {
+  const rawCountry =
+    req?.body?.country ||
+    req?.query?.country ||
+    req?.headers?.["x-country-code"] ||
+    req?.headers?.["cf-ipcountry"] ||
+    req?.headers?.["x-vercel-ip-country"] ||
+    "US";
+
+  return String(rawCountry).trim().toUpperCase();
+}
+
+// Prices are stored in USD. India customers see/pay INR, others see/pay USD.
 async function getCurrency(req = null) {
+  const country = detectCountry(req);
+  if (country === "IN" || country === "INDIA") {
+    return {
+      symbol: "₹",
+      code: "INR",
+      rate: getPayUUsdToInrRate(),
+      base: "USD",
+      country: "IN",
+    };
+  }
+
   return {
     symbol: "$",
     code: "USD",
     rate: 1,
     base: "USD",
-    country: "US",
+    country: country || "US",
   };
 }
 

@@ -113,9 +113,13 @@ const CheckOut = () => {
   }, [id, done, productType, lang]);
 
   // ── only show gateways that are active AND have a component ready ─────────
-  const activeGateways = Object.entries(gateways).filter(
-    ([key, val]) => val.active && GATEWAY_COMPONENTS[key],
-  );
+  const activeGateways = Object.entries(gateways).filter(([key, val]) => {
+    if (!val.active || !GATEWAY_COMPONENTS[key]) return false;
+    if (currency.country !== "IN" && ["razorpay", "payu"].includes(key)) {
+      return false;
+    }
+    return true;
+  });
 
   // ── currency conversion ───────────────────────────────────────────────────
   const selectedPrice = plan?.price;
@@ -245,7 +249,7 @@ const CheckOut = () => {
 
                   {/* currency info */}
                   <Typography variant="caption" color="text.disabled">
-                    {lang?.priceIn || "Price in"} USD
+                    {lang?.priceIn || "Price in"} {currency.code}
                   </Typography>
 
                   <Divider />

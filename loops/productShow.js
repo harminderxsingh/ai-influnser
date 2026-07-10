@@ -100,18 +100,7 @@ async function recoverStaleSubmissions() {
     `UPDATE product_content
      SET status = 'processing', error_message = NULL
      WHERE status = 'error'
-       AND error_message = 'Influencer has no photo'
-       AND (
-         model IS NULL
-         OR model = ''
-         OR model = 'null'
-         OR model = '{}'
-         OR other LIKE '%"auto_mode":true%'
-         OR other LIKE '%"auto_mode":1%'
-         OR other LIKE '%"auto_mode":"true"%'
-         OR other LIKE '%"influencer_mode":"auto"%'
-         OR other NOT LIKE '%"influencer_mode":"select"%'
-       )`,
+       AND error_message = 'Influencer has no photo'`,
     [],
   );
 
@@ -202,15 +191,15 @@ function isTruthyAutoFlag(value) {
 }
 
 function shouldUseAutoInfluencer(otherData = {}, model, storedInfluencer = null) {
-  if (otherData.influencer_mode === "select") {
-    return false;
-  }
-
   if (
     isTruthyAutoFlag(otherData.auto_mode) ||
     otherData.influencer_mode === "auto"
   ) {
     return true;
+  }
+
+  if (otherData.influencer_mode === "select" && storedInfluencer?.photo_url) {
+    return false;
   }
 
   if (!model) return true;
@@ -496,7 +485,6 @@ async function processProductShowcase(item, provider, fee) {
 
   const otherData = parseOther(other);
   const storedInfluencer = parseInfluencer(model);
-  const isExplicitSelectMode = otherData.influencer_mode === "select";
   const isAutoProductFlow = shouldUseAutoInfluencer(
     otherData,
     model,
@@ -505,9 +493,7 @@ async function processProductShowcase(item, provider, fee) {
 
   if (isAutoProductFlow) {
     otherData.auto_mode = true;
-    if (!otherData.influencer_mode) {
-      otherData.influencer_mode = "auto";
-    }
+    otherData.influencer_mode = "auto";
   }
 
   let influencer;
@@ -632,21 +618,16 @@ async function processProductShowcase(item, provider, fee) {
     influencer = storedInfluencer;
 
     if (!influencer?.photo_url) {
-      if (isExplicitSelectMode) {
-        await setContentError(id, "Influencer has no photo");
-        await logUsage({
-          uid,
-          task: "product_showcase_maker",
-          status: "error",
-          des: `product_content #${id} — influencer has no photo_url`,
-        });
-        return;
-      }
-
       otherData.auto_mode = true;
       otherData.influencer_mode = "auto";
       await saveOther(id, otherData, "processing");
       await releaseProductClaim(id);
+      await logUsage({
+        uid,
+        task: "product_showcase_maker",
+        status: "processing",
+        des: `product_content #${id} — selected influencer had no photo, switching to auto influencer`,
+      });
       return;
     }
   }

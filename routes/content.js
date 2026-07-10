@@ -357,6 +357,48 @@ router.get(
         [req.decode.uid],
       );
 
+      const brokenAutoRows = await query(
+        `SELECT id, other, generated_video
+         FROM product_content
+         WHERE uid = ?
+           AND status = 'active'
+           AND generated_video IS NOT NULL
+           AND generated_video <> ''
+           AND generated_video NOT REGEXP '\\\\.(mp4|mov|webm|m4v)$'
+           AND (
+             other LIKE '%"auto_mode":true%'
+             OR other LIKE '%"influencer_mode":"auto"%'
+           )`,
+        [req.decode.uid],
+      );
+
+      for (const row of brokenAutoRows) {
+        let otherData = {};
+        try {
+          otherData = row.other ? JSON.parse(row.other) : {};
+        } catch {
+          otherData = {};
+        }
+
+        if (!otherData.auto_influencer_photo) {
+          otherData.auto_influencer_photo = row.generated_video;
+        }
+        otherData.auto_stage = "showcase";
+
+        await query(
+          `UPDATE product_content
+           SET status = 'processing',
+               generated_video = NULL,
+               error_message = NULL,
+               job_id = NULL,
+               other = ?
+           WHERE id = ? AND uid = ?`,
+          [JSON.stringify(otherData), row.id, req.decode.uid],
+        );
+
+        await triggerProductShowcase(row.id);
+      }
+
       const data = await query(
         `SELECT * FROM product_content WHERE uid = ? ORDER BY created_at DESC`,
         [req.decode.uid],

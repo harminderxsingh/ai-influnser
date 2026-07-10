@@ -141,6 +141,39 @@ async function recoverStaleSubmissions() {
        AND updated_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)`,
     [],
   );
+
+  const brokenAutoRows = await query(
+    `SELECT id, other, generated_video
+     FROM product_content
+     WHERE status = 'active'
+       AND generated_video IS NOT NULL
+       AND generated_video <> ''
+       AND generated_video NOT REGEXP '\\\\.(mp4|mov|webm|m4v)$'
+       AND (
+         other LIKE '%"auto_mode":true%'
+         OR other LIKE '%"influencer_mode":"auto"%'
+       )`,
+    [],
+  );
+
+  for (const row of brokenAutoRows) {
+    const otherData = parseOther(row.other);
+    if (!otherData.auto_influencer_photo) {
+      otherData.auto_influencer_photo = row.generated_video;
+    }
+    otherData.auto_stage = "showcase";
+
+    await query(
+      `UPDATE product_content
+       SET status = 'processing',
+           generated_video = NULL,
+           error_message = NULL,
+           job_id = NULL,
+           other = ?
+       WHERE id = ?`,
+      [JSON.stringify(otherData), row.id],
+    );
+  }
 }
 
 async function getFreshRow(id) {
@@ -208,6 +241,26 @@ function parseInfluencer(raw) {
 
 function isTruthyAutoFlag(value) {
   return value === true || value === 1 || value === "1" || value === "true";
+}
+
+function isVideoFileName(fileName = "") {
+  return /\.(mp4|mov|webm|m4v)$/i.test(String(fileName).split("?")[0]);
+}
+
+function isAutoInfluencerJob(otherData = {}, jobId) {
+  if (otherData.auto_stage === "influencer_photo") return true;
+  if (
+    otherData.auto_influencer_job_id &&
+    otherData.auto_influencer_job_id === jobId
+  ) {
+    return true;
+  }
+
+  return (
+    (isTruthyAutoFlag(otherData.auto_mode) ||
+      otherData.influencer_mode === "auto") &&
+    !otherData.auto_influencer_photo
+  );
 }
 
 function shouldUseAutoInfluencer(otherData = {}, model, storedInfluencer = null) {
@@ -318,7 +371,7 @@ async function processProductShowcase(item, provider, fee) {
   const otherData = parseOther(other);
 
   if (job_id) {
-    if (otherData.auto_stage === "influencer_photo") {
+    if (isAutoInfluencerJob(otherData, job_id)) {
       let result;
 
       try {
@@ -500,6 +553,27 @@ async function processProductShowcase(item, provider, fee) {
       await notifyUser(user, {
         task: "Product Showcase Video",
         des,
+        status: "Refunded",
+      });
+      return;
+    }
+
+    if (!isVideoFileName(savedPath)) {
+      await refundCredits(uid, fee);
+      await setContentError(
+        id,
+        `Provider returned a non-video file for showcase: ${savedPath}`,
+      );
+      await logUsage({
+        uid,
+        task: "product_showcase_maker",
+        credits: fee,
+        status: "refunded",
+        des: `product_content #${id} provider returned non-video showcase output: ${savedPath}`,
+      });
+      await notifyUser(user, {
+        task: "Product Showcase Video",
+        des: `Product showcase #${id} failed because the provider returned a non-video file.`,
         status: "Refunded",
       });
       return;

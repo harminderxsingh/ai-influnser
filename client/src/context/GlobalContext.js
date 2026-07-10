@@ -183,6 +183,18 @@ export const GlobalProvider = ({ children }) => {
           return { ...response, success: false, logout: true };
         }
 
+        if (!admin && response?.data?.emailVerificationRequired) {
+          localStorage.removeItem(`${TOKEN_PREFIX}_user`);
+          const emailParam = response.data.email
+            ? `?email=${encodeURIComponent(response.data.email)}`
+            : "";
+          history.push(`/verify-email${emailParam}`);
+          if (showSnackbar && response.data.msg) {
+            showSnack(response.data.msg, Boolean(response.data.success));
+          }
+          return { ...response, success: false };
+        }
+
         if (showSnackbar) {
           if (!response?.data?.success && response?.data?.msg) {
             showSnack(response.data.msg, false);
@@ -262,6 +274,7 @@ export const GlobalProvider = ({ children }) => {
       endGlobalLoading,
       handleLogout,
       showSnack,
+      history,
     ],
   );
 

@@ -27,7 +27,6 @@ const Free = ({ plan, paying, setPaying, lang }) => {
         variant="outlined"
         size="large"
         disabled={!!paying}
-        // onClick={handleMercadoPago}
         startIcon={
           loading ? (
             <CircularProgress size={18} color="inherit" />

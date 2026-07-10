@@ -34,6 +34,15 @@ const validateUser = async (req, res, next) => {
       });
     }
     if (getUser[0].role === "user") {
+      if (Number(getUser[0].email_verified ?? 1) !== 1) {
+        return res.json({
+          success: false,
+          msg: "Please verify your email before accessing your account.",
+          emailVerificationRequired: true,
+          email: getUser[0].email,
+        });
+      }
+
       req.decode = decode;
       req.decode.user = getUser[0];
       return next();

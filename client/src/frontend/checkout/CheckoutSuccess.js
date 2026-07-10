@@ -24,21 +24,14 @@ const CheckoutSuccess = () => {
   const [msg, setMsg] = React.useState("");
   const [successProductType, setSuccessProductType] = React.useState("");
 
-  // ── v5 way to read query params ──────────────────────────────────────────
   const searchParams = new URLSearchParams(location.search);
   const gateway = searchParams.get("gateway");
-  const session_id = searchParams.get("session_id");
   const order_id = searchParams.get("token");
-  const reference = searchParams.get("reference");
-  const mp_payment_id = searchParams.get("payment_id");
-  const mp_status = searchParams.get("status");
-  const mp_ext_ref = searchParams.get("external_reference");
   const verified = searchParams.get("verified");
   const product_type = searchParams.get("product_type");
-  const error = searchParams.get("error");
 
   React.useEffect(() => {
-    if ((gateway === "razorpay" || gateway === "payu") && verified === "1") {
+    if (gateway === "razorpay" && verified === "1") {
       setSuccessProductType(product_type || "");
       setStatus("success");
       setMsg(
@@ -46,22 +39,8 @@ const CheckoutSuccess = () => {
           ? "Credits added successfully!"
           : "Plan activated!",
       );
-    } else if (gateway === "payu") {
-      setStatus("error");
-      setMsg(error || "PayU payment verification failed.");
-    } else if (gateway === "stripe" && session_id) {
-      verifyStripe(session_id);
     } else if (gateway === "paypal" && order_id) {
       verifyPayPal(order_id);
-    } else if (gateway === "paystack" && reference) {
-      verifyPaystack(reference);
-    } else if (gateway === "mercadopago" && mp_payment_id) {
-      if (mp_status !== "approved") {
-        setStatus("error");
-        setMsg("Payment was not approved.");
-        return;
-      }
-      verifyMercadoPago(mp_payment_id, mp_ext_ref);
     } else {
       setStatus("error");
       setMsg("Unknown payment gateway or missing session.");
@@ -79,42 +58,12 @@ const CheckoutSuccess = () => {
     }
   }
 
-  async function verifyMercadoPago(payment_id, external_reference) {
-    const res = await hitAxios({
-      path: "/api/payment/mercadopago/verify-order",
-      admin: false,
-      post: true,
-      obj: { payment_id, external_reference },
-    });
-    handleVerificationResponse(res);
-  }
-
-  async function verifyPaystack(reference) {
-    const res = await hitAxios({
-      path: "/api/payment/paystack/verify-order",
-      admin: false,
-      post: true,
-      obj: { reference },
-    });
-    handleVerificationResponse(res);
-  }
-
   async function verifyPayPal(order_id) {
     const res = await hitAxios({
       path: "/api/payment/paypal/verify-order",
       admin: false,
       post: true,
       obj: { order_id },
-    });
-    handleVerificationResponse(res);
-  }
-
-  async function verifyStripe(session_id) {
-    const res = await hitAxios({
-      path: "/api/payment/stripe/verify-session",
-      admin: false,
-      post: true,
-      obj: { session_id },
     });
     handleVerificationResponse(res);
   }

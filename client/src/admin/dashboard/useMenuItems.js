@@ -82,7 +82,6 @@ export const useMenuItems = () => {
       submenu: [
         { id: "web-theme", text: lang?.webTheme || "Web Theme" },
         { id: "site-settings", text: lang?.siteSettings || "Site Settings" },
-        { id: "social-login", text: lang?.socialLogin || "Social Login" },
       ],
     },
     {

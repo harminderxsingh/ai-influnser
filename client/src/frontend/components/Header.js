@@ -159,8 +159,8 @@ const Header = ({ web: webProp }) => {
                 src={logoUrl}
                 alt={siteName}
                 sx={{
-                  height: 40,
-                  maxWidth: 120,
+                  height: { xs: 46, md: 56 },
+                  maxWidth: { xs: 170, md: 220 },
                   objectFit: "contain",
                   display: "block",
                 }}

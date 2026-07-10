@@ -18,7 +18,6 @@ import Leads from "../leads/Leads";
 import WebTranslation from "../webTranslation/WebTranslation";
 import Dash from "./Dash";
 import Orders from "../orders/Orders";
-import SocialLogin from "../socialLogin/SocialLogin";
 import UpdateApp from "../updateaApp/UpdateApp";
 import InstaConfig from "../instaConfig/InstaConfig";
 import TiktokConfig from "../tiktokConfig/TiktokConfig";
@@ -52,7 +51,6 @@ const Content = ({ selectedMenu, web }) => {
       )}
       {selectedMenu === "help" && <SupportAdmin lang={lang} />}
       {selectedMenu === "web-translation" && <WebTranslation lang={lang} />}
-      {selectedMenu === "social-login" && <SocialLogin lang={lang} />}
       {selectedMenu === "update" && <UpdateApp lang={lang} />}
       {selectedMenu === "instagram-config" && <InstaConfig lang={lang} />}
       {selectedMenu === "tiktok-config" && <TiktokConfig lang={lang} />}

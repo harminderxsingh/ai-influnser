@@ -37,20 +37,14 @@ import { GlobalContext } from "../../context/GlobalContext";
 
 // ── gateway chip colors ───────────────────────────────────────────────────────
 const GATEWAY_COLOR = {
-  stripe: "info",
   paypal: "primary",
   razorpay: "secondary",
-  paystack: "success",
-  mercadopago: "warning",
   free_trial: "default",
 };
 
 const GATEWAY_LABEL = {
-  stripe: "Stripe",
   paypal: "PayPal",
   razorpay: "Razorpay",
-  paystack: "Paystack",
-  mercadopago: "Mercado Pago",
   free_trial: "Free Trial",
 };
 

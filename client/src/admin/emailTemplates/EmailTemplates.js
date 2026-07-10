@@ -30,6 +30,11 @@ const TEMPLATE_VARS = {
     { var: "{{date}}", label: "Date" },
     { var: "{{login_url}}", label: "Login URL" },
   ],
+  email_template_email_verification: [
+    { var: "{{user_email}}", label: "User Email" },
+    { var: "{{verify_link}}", label: "Verify Link" },
+    { var: "{{date}}", label: "Date" },
+  ],
   // ── UPDATED ──────────────────────────────────────────
   email_template_pass_recovery: [
     { var: "{{user_email}}", label: "User Email" },
@@ -74,6 +79,29 @@ const DEFAULT_TEMPLATES = {
   </div>
   <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e0e0e0;">
     <p style="margin:0;font-size:12px;color:#9ca3af;">This email was sent automatically. Please do not reply.</p>
+  </div>
+</div>`,
+
+  email_template_email_verification: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+  <div style="background:#4f46e5;padding:28px 32px;">
+    <h2 style="color:#fff;margin:0;font-size:22px;">Verify your email</h2>
+  </div>
+  <div style="padding:28px 32px;background:#ffffff;">
+    <p style="color:#374151;font-size:15px;margin:0 0 16px;">Please verify your email address before accessing your account.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px;">
+      <tr style="background:#f9fafb;">
+        <td style="padding:8px 12px;color:#6b7280;font-weight:600;width:40%;">Email</td>
+        <td style="padding:8px 12px;color:#111827;">{{user_email}}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;color:#6b7280;font-weight:600;">Date</td>
+        <td style="padding:8px 12px;color:#111827;">{{date}}</td>
+      </tr>
+    </table>
+    <a href="{{verify_link}}" style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;">Verify Email</a>
+  </div>
+  <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e0e0e0;">
+    <p style="margin:0;font-size:12px;color:#9ca3af;">If you did not create this account, you can ignore this email.</p>
   </div>
 </div>`,
 
@@ -176,6 +204,10 @@ const DEFAULT_TEMPLATES = {
 const TABS = (lang) => [
   { key: "email_template_welcome", label: lang?.tabWelcome || "Welcome" },
   {
+    key: "email_template_email_verification",
+    label: lang?.tabEmailVerification || "Email Verification",
+  },
+  {
     key: "email_template_pass_recovery",
     label: lang?.tabPassRecovery || "Password Reset",
   },
@@ -196,6 +228,7 @@ const EmailTemplates = ({ lang }) => {
   const [activeTab, setActiveTab] = React.useState(0);
   const [templates, setTemplates] = React.useState({
     email_template_welcome: "",
+    email_template_email_verification: "",
     email_template_pass_recovery: "",
     email_template_usage_update: "",
     email_template_plan_activation: "",
@@ -223,6 +256,8 @@ const EmailTemplates = ({ lang }) => {
       const d = res.data.data;
       setTemplates({
         email_template_welcome: d.email_template_welcome || "",
+        email_template_email_verification:
+          d.email_template_email_verification || "",
         email_template_pass_recovery: d.email_template_pass_recovery || "",
         email_template_usage_update: d.email_template_usage_update || "",
         email_template_plan_activation: d.email_template_plan_activation || "",

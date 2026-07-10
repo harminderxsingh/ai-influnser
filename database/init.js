@@ -23,6 +23,9 @@ const queries = [
             referral_code VARCHAR(64) DEFAULT NULL,
             referred_by VARCHAR(999) DEFAULT NULL,
             referral_bonus_claimed TINYINT(1) DEFAULT 0,
+            email_verified TINYINT(1) DEFAULT 1,
+            email_verify_token VARCHAR(255) DEFAULT NULL,
+            email_verify_sent_at DATETIME DEFAULT NULL,
             role VARCHAR(999) DEFAULT 'user',
             plan LONGTEXT DEFAULT NULL,
             plan_ending VARCHAR(999) DEFAULT NULL,
@@ -50,6 +53,18 @@ const queries = [
   {
     run: "ALTER TABLE `user` ADD COLUMN `referral_bonus_claimed` TINYINT(1) DEFAULT 0 AFTER `referred_by`;",
     check: "SHOW COLUMNS FROM `user` LIKE 'referral_bonus_claimed';",
+  },
+  {
+    run: "ALTER TABLE `user` ADD COLUMN `email_verified` TINYINT(1) DEFAULT 1 AFTER `referral_bonus_claimed`;",
+    check: "SHOW COLUMNS FROM `user` LIKE 'email_verified';",
+  },
+  {
+    run: "ALTER TABLE `user` ADD COLUMN `email_verify_token` VARCHAR(255) DEFAULT NULL AFTER `email_verified`;",
+    check: "SHOW COLUMNS FROM `user` LIKE 'email_verify_token';",
+  },
+  {
+    run: "ALTER TABLE `user` ADD COLUMN `email_verify_sent_at` DATETIME DEFAULT NULL AFTER `email_verify_token`;",
+    check: "SHOW COLUMNS FROM `user` LIKE 'email_verify_sent_at';",
   },
   {
     run: `CREATE TABLE referral_events (
@@ -612,6 +627,11 @@ const queries = [
     run: "ALTER TABLE `web_private` ADD COLUMN `email_template_plan_activation` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
     check:
       "SHOW COLUMNS FROM `web_private` LIKE 'email_template_plan_activation';",
+  },
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `email_template_email_verification` LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
+    check:
+      "SHOW COLUMNS FROM `web_private` LIKE 'email_template_email_verification';",
   },
   {
     run: "ALTER TABLE usage_log MODIFY des LONGTEXT DEFAULT NULL;",
@@ -1210,6 +1230,76 @@ const queries = [
     check:
       "SELECT id FROM ai_providers WHERE provider_key='kie_ai' AND showcase_create_payload LIKE '%aspect_ratio%' LIMIT 1;",
   },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `pay_stripe_id`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'pay_stripe_id';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `pay_stripe_key`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'pay_stripe_key';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `stripe_active`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'stripe_active';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `pay_paystack_id`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'pay_paystack_id';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `pay_paystack_key`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'pay_paystack_key';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `paystack_active`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'paystack_active';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `pay_mercadopago_access_token`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'pay_mercadopago_access_token';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `pay_mercadopago_public_key`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'pay_mercadopago_public_key';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `mercadopago_active`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'mercadopago_active';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `payu_key`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'payu_key';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `payu_salt`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'payu_salt';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `payu_mode`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'payu_mode';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_private` DROP COLUMN `payu_active`;",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'payu_active';",
+    runWhenExists: true,
+  },
+  {
+    run: "ALTER TABLE `web_public` DROP COLUMN `google_login_id`;",
+    check: "SHOW COLUMNS FROM `web_public` LIKE 'google_login_id';",
+    runWhenExists: true,
+  },
 ];
 
 const initDatabase = async () => {
@@ -1218,7 +1308,10 @@ const initDatabase = async () => {
       const connection = await db.getConnection();
       try {
         const [rows] = await connection.query(query.check);
-        if (rows.length === 0) {
+        const shouldRun = query.runWhenExists
+          ? rows.length > 0
+          : rows.length === 0;
+        if (shouldRun) {
           await connection.query(query.run);
           console.log("Query executed:", query.run.substring(0, 50) + "...");
         }

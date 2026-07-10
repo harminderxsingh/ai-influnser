@@ -18,23 +18,15 @@ import { CreditCardOutlined, StarOutlined } from "@mui/icons-material";
 import Header from "../components/Header";
 import FooterComp from "../components/FooterComp";
 
-import StripeComp from "./gateways/StripeComp";
 import PayPalComp from "./gateways/PayPalComp";
 import RazorpayComp from "./gateways/RazorpayComp";
-import PaystackComp from "./gateways/PaystackComp";
-import PayUComp from "./gateways/PayUComp";
-import MercadoPagoComp from "./gateways/MercadoPagoComp";
 import Free from "./gateways/Free";
 import OfflineCheckout from "./gateways/OfflineCheckout"; // ← new
 
 // ── maps gateway key → component ─────────────────────────────────────────────
 const GATEWAY_COMPONENTS = {
-  stripe: StripeComp,
   paypal: PayPalComp,
   razorpay: RazorpayComp,
-  paystack: PaystackComp,
-  payu: PayUComp,
-  mercadopago: MercadoPagoComp,
   free: Free,
 };
 
@@ -115,7 +107,7 @@ const CheckOut = () => {
   // ── only show gateways that are active AND have a component ready ─────────
   const activeGateways = Object.entries(gateways).filter(([key, val]) => {
     if (!val.active || !GATEWAY_COMPONENTS[key]) return false;
-    if (currency.country !== "IN" && ["razorpay", "payu"].includes(key)) {
+    if (currency.country !== "IN" && key === "razorpay") {
       return false;
     }
     return true;

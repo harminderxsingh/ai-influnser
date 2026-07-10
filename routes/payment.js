@@ -3,13 +3,10 @@ const router = express.Router();
 const { query } = require("../database/connection.js");
 const adminValidator = require("../middlewares/admin.js");
 const userValidator = require("../middlewares/user.js");
-const Stripe = require("stripe");
 const { updateUserPlan, addUserCredits, getEnv } = require("../utils/common.js");
 const paypal = require("@paypal/checkout-server-sdk");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
-const { MercadoPagoConfig, Preference, Payment } = require("mercadopago");
-const payuCallbackParser = express.urlencoded({ extended: false, type: "*/*" });
 
 function detectCountry(req = null) {
   const rawCountry =
@@ -30,7 +27,7 @@ async function getCurrency(req = null) {
     return {
       symbol: "₹",
       code: "INR",
-      rate: getPayUUsdToInrRate(),
+      rate: getUsdToInrRate(),
       base: "USD",
       country: "IN",
     };
@@ -72,23 +69,9 @@ function toLocalAmount(usdPrice, rate) {
   return parseFloat((parseFloat(usdPrice) * rate).toFixed(2));
 }
 
-function getPayUUsdToInrRate() {
-  const configuredRate = parseFloat(process.env.PAYU_USD_TO_INR_RATE || "");
+function getUsdToInrRate() {
+  const configuredRate = parseFloat(process.env.USD_TO_INR_RATE || "");
   return Number.isFinite(configuredRate) && configuredRate > 0 ? configuredRate : 85;
-}
-
-function getPayUInrAmount(usdPrice) {
-  return toLocalAmount(usdPrice, getPayUUsdToInrRate());
-}
-
-async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 function getPurchaseInput(body = {}) {
@@ -196,46 +179,6 @@ function createRazorpayReceipt() {
   return `rcpt_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`;
 }
 
-function createPaymentReference(prefix) {
-  return `${prefix}${Date.now().toString(36)}${crypto.randomBytes(4).toString("hex")}`;
-}
-
-function getConfiguredAppUrl() {
-  const env = getEnv();
-  return (
-    process.env.APP_URL ||
-    env.backendUrl ||
-    env.frontendUrl ||
-    "http://localhost:8001"
-  ).replace(/\/$/, "");
-}
-
-function getPayUPhone(user = {}) {
-  const raw = String(user.mobile || user.phone || user.whatsapp || "").replace(
-    /\D/g,
-    "",
-  );
-  if (raw.length >= 10) return raw.slice(-10);
-  return "9999999999";
-}
-
-function sanitizePayUField(value, fallback = "") {
-  return String(value || fallback)
-    .replace(/\|/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-// ── helper ───────────────────────────────────────────────────────────────────
-async function getStripeInstance() {
-  const data = await query(`SELECT * FROM web_private LIMIT 1`, []);
-  if (!data.length) throw new Error("No settings found");
-  const { pay_stripe_key, stripe_active } = data[0];
-  if (!stripe_active) throw new Error("Stripe is not enabled");
-  if (!pay_stripe_key) throw new Error("Stripe secret key not configured");
-  return new Stripe(pay_stripe_key);
-}
-
 // ── GET /api/payment/get ─────────────────────────────────────────────────────
 router.get("/get", adminValidator, async (req, res) => {
   try {
@@ -244,9 +187,6 @@ router.get("/get", adminValidator, async (req, res) => {
       return res.json({ success: false, msg: "No settings found" });
 
     const {
-      pay_stripe_id,
-      pay_stripe_key,
-      stripe_active,
       pay_paypal_id,
       pay_paypal_key,
       paypal_mode,
@@ -254,26 +194,11 @@ router.get("/get", adminValidator, async (req, res) => {
       rz_id,
       rz_key,
       rz_active,
-      pay_paystack_id,
-      pay_paystack_key,
-      paystack_active,
-      pay_mercadopago_access_token,
-      pay_mercadopago_public_key,
-      mercadopago_active,
-      payu_key,
-      payu_salt,
-      payu_mode,
-      payu_active,
-      offline_payment_html,
-      offline_payment_active,
     } = data[0];
 
     res.json({
       success: true,
       data: {
-        pay_stripe_id,
-        pay_stripe_key,
-        stripe_active,
         pay_paypal_id,
         pay_paypal_key,
         paypal_mode: paypal_mode === "sandbox" ? "sandbox" : "live",
@@ -281,18 +206,6 @@ router.get("/get", adminValidator, async (req, res) => {
         rz_id,
         rz_key,
         rz_active,
-        pay_paystack_id,
-        pay_paystack_key,
-        paystack_active,
-        pay_mercadopago_access_token,
-        pay_mercadopago_public_key,
-        mercadopago_active,
-        payu_key,
-        payu_salt,
-        payu_mode,
-        payu_active,
-        offline_payment_html,
-        offline_payment_active,
       },
     });
   } catch (err) {
@@ -304,9 +217,6 @@ router.get("/get", adminValidator, async (req, res) => {
 router.post("/post", adminValidator, async (req, res) => {
   try {
     const {
-      pay_stripe_id,
-      pay_stripe_key,
-      stripe_active,
       pay_paypal_id,
       pay_paypal_key,
       paypal_mode,
@@ -314,33 +224,13 @@ router.post("/post", adminValidator, async (req, res) => {
       rz_id,
       rz_key,
       rz_active,
-      pay_paystack_id,
-      pay_paystack_key,
-      paystack_active,
-      pay_mercadopago_access_token,
-      pay_mercadopago_public_key,
-      mercadopago_active,
-      payu_key,
-      payu_salt,
-      payu_mode,
-      payu_active,
-      offline_payment_html,
-      offline_payment_active,
     } = req.body;
 
     await query(
       `UPDATE web_private SET
-        pay_stripe_id = ?, pay_stripe_key = ?, stripe_active = ?,
         pay_paypal_id = ?, pay_paypal_key = ?, paypal_mode = ?, paypal_active = ?,
-        rz_id = ?, rz_key = ?, rz_active = ?,
-        pay_paystack_id = ?, pay_paystack_key = ?, paystack_active = ?,
-        pay_mercadopago_access_token = ?, pay_mercadopago_public_key = ?, mercadopago_active = ?,
-        payu_key = ?, payu_salt = ?, payu_mode = ?, payu_active = ?,
-        offline_payment_html = ?, offline_payment_active = ?`,
+        rz_id = ?, rz_key = ?, rz_active = ?`,
       [
-        pay_stripe_id || null,
-        pay_stripe_key || null,
-        stripe_active || 0,
         pay_paypal_id || null,
         pay_paypal_key || null,
         paypal_mode === "sandbox" ? "sandbox" : "live",
@@ -348,18 +238,6 @@ router.post("/post", adminValidator, async (req, res) => {
         rz_id || null,
         rz_key || null,
         rz_active || 0,
-        pay_paystack_id || null,
-        pay_paystack_key || null,
-        paystack_active || 0,
-        pay_mercadopago_access_token || null,
-        pay_mercadopago_public_key || null,
-        mercadopago_active || 0,
-        payu_key || null,
-        payu_salt || null,
-        payu_mode === "live" ? "live" : "test",
-        payu_active || 0,
-        offline_payment_html || null,
-        offline_payment_active || 0,
       ],
     );
     res.json({ success: true, msg: "Payment gateways updated successfully" });
@@ -378,168 +256,16 @@ router.get("/active-gateways", async (req, res) => {
     res.json({
       success: true,
       data: {
-        stripe: { active: !!d.stripe_active, publicKey: d.pay_stripe_id },
         paypal: {
           active: !!d.paypal_active,
           clientId: d.pay_paypal_id,
           mode: d.paypal_mode === "sandbox" ? "sandbox" : "live",
         },
         razorpay: { active: !!d.rz_active, keyId: d.rz_id },
-        paystack: { active: !!d.paystack_active, publicKey: d.pay_paystack_id },
-        mercadopago: {
-          active: !!d.mercadopago_active,
-          publicKey: d.pay_mercadopago_public_key,
-        },
-        payu: {
-          active: !!d.payu_active,
-          mode: d.payu_mode === "live" ? "live" : "test",
-        },
       },
     });
   } catch (err) {
     res.json({ err, success: false, message: "Something went wrong" });
-  }
-});
-
-async function getStripeKeys() {
-  const data = await query(`SELECT * FROM web_private LIMIT 1`, []);
-  if (!data.length) throw new Error("No settings found");
-  const { pay_stripe_id, pay_stripe_key, stripe_active } = data[0];
-  if (!stripe_active) throw new Error("Stripe is not enabled");
-  if (!pay_stripe_key) throw new Error("Stripe secret key not configured");
-  if (!pay_stripe_id) throw new Error("Stripe public key not configured");
-  return {
-    secretKey: pay_stripe_key,
-    publicKey: pay_stripe_id,
-  };
-}
-
-// ── POST /api/payment/stripe/create-session ──────────────────────────────────
-router.post("/stripe/create-session", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const item = await getPurchaseItem(getPurchaseInput(req.body));
-    const billingInterval = getPurchaseBillingInterval(
-      item,
-      req.body.billing_interval,
-    );
-    const amount = getPurchaseAmount(item, billingInterval);
-
-    const { secretKey } = await getStripeKeys();
-    const { symbol, code, rate } = await getCurrency(req); // ← currency
-    const appUrl = process.env.APP_URL || "https://myavatarlab.com";
-    const stripe = require("stripe")(secretKey);
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: code.toLowerCase(), // ← dynamic
-            unit_amount: toSmallestUnit(amount, rate, code), // ← converted
-            product_data: {
-              name: item.title,
-              description: billingInterval
-                ? `${item.credits} credits · ${billingInterval}`
-                : item.description,
-            },
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      success_url: `${appUrl}/checkout/success?gateway=stripe&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}${getCancelPath(item)}?cancelled=true`,
-      metadata: {
-        ...getPurchaseMetadata(item, uid),
-        ...(billingInterval ? { billing_interval: billingInterval } : {}),
-      },
-    });
-
-    res.json({ success: true, url: session.url });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Stripe session creation failed",
-    });
-  }
-});
-
-// ── POST /api/payment/stripe/verify-session ──────────────────────────────────
-router.post("/stripe/verify-session", userValidator, async (req, res) => {
-  try {
-    const { session_id } = req.body;
-    const uid = req.decode.uid; // ← uid from JWT
-
-    const stripe = await getStripeInstance();
-    const session = await stripe.checkout.sessions.retrieve(session_id);
-
-    // must be paid
-    if (session.payment_status !== "paid") {
-      return res.json({ success: false, msg: "Payment not completed" });
-    }
-
-    // must belong to this user
-    if (String(session.metadata.uid) !== String(uid)) {
-      return res.json({ success: false, msg: "Unauthorized" });
-    }
-
-    const item = await getPurchaseItem({
-      productType: session.metadata.product_type || "plan",
-      productId:
-        session.metadata.product_type === "credit_package"
-          ? session.metadata.package_id
-          : session.metadata.plan_id,
-    });
-
-    // ── idempotency: don't activate twice ────────────────────────────────────
-    const existing = await query(
-      `SELECT id FROM orders WHERE gateway = 'stripe' AND JSON_EXTRACT(meta, '$.session_id') = ? LIMIT 1`,
-      [session_id],
-    );
-    if (existing.length) {
-      return res.json({
-        success: true,
-        msg: "Plan already activated",
-        alreadyDone: true,
-      });
-    }
-
-    // ── save order record ─────────────────────────────────────────────────────
-    const order = await savePaidOrder({
-      uid,
-      item,
-      amount: session.amount_total / 100,
-      gateway: "stripe",
-      meta: {
-        session_id: session.id,
-        payment_intent: session.payment_intent,
-        customer_email: session.customer_details?.email || null,
-        ...(session.metadata?.billing_interval
-          ? { billing_interval: session.metadata.billing_interval }
-          : {}),
-      },
-    });
-
-    const result = await fulfillPurchase(item, uid, {
-      gateway: "stripe",
-      amount: session.amount_total / 100,
-      orderId: order.insertId,
-    });
-
-    if (!result.success) {
-      return res.json({ success: false, msg: result.msg });
-    }
-
-    res.json({
-      success: true,
-      msg: successMessage(item),
-      product_type: item.productType,
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({ success: false, msg: err.message || "Verification failed" });
   }
 });
 
@@ -875,611 +601,6 @@ router.post("/razorpay/verify-order", userValidator, async (req, res) => {
   }
 });
 
-// ── helper: get Paystack keys ─────────────────────────────────────────────────
-async function getPaystackKeys() {
-  const data = await query(`SELECT * FROM web_private LIMIT 1`, []);
-  if (!data.length) throw new Error("No settings found");
-  const { pay_paystack_id, pay_paystack_key, paystack_active } = data[0];
-  if (!paystack_active) throw new Error("Paystack is not enabled");
-  if (!pay_paystack_key) throw new Error("Paystack secret key not configured");
-  if (!pay_paystack_id) throw new Error("Paystack public key not configured");
-  return { secretKey: pay_paystack_key, publicKey: pay_paystack_id };
-}
-
-// ── POST /api/payment/paystack/create-order ───────────────────────────────────
-router.post("/paystack/create-order", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const item = await getPurchaseItem(getPurchaseInput(req.body));
-    const billingInterval = getPurchaseBillingInterval(
-      item,
-      req.body.billing_interval,
-    );
-    const amount = getPurchaseAmount(item, billingInterval);
-
-    const users = await query(`SELECT * FROM user WHERE uid = ? LIMIT 1`, [
-      uid,
-    ]);
-    if (!users.length)
-      return res.json({ success: false, msg: "User not found" });
-    const user = users[0];
-
-    const { secretKey, publicKey } = await getPaystackKeys();
-    const { symbol, code, rate } = await getCurrency(req); // ← currency
-    const appUrl = process.env.APP_URL || "https://myavatarlab.com";
-    const reference = `pstk_${uid}_${item.productType}_${item.planId || item.packageId}_${Date.now()}`;
-
-    const paystackRes = await fetchWithTimeout(
-      "https://api.paystack.co/transaction/initialize",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${secretKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: user.email,
-          amount: toSmallestUnit(amount, rate, code), // ← converted
-          currency: code.toUpperCase(), // ← dynamic
-          reference: reference,
-          metadata: {
-            ...getPurchaseMetadata(item, uid),
-            ...(billingInterval ? { billing_interval: billingInterval } : {}),
-            product_title: item.title,
-          },
-          callback_url: `${appUrl}/checkout/success?gateway=paystack`,
-        }),
-      },
-      15000,
-    );
-
-    const paystackData = await paystackRes.json();
-    if (!paystackData.status) {
-      return res.json({
-        success: false,
-        msg: paystackData.message || "Paystack init failed",
-      });
-    }
-
-    res.json({
-      success: true,
-      url: paystackData.data.authorization_url,
-      reference: reference,
-      publicKey: publicKey,
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Paystack order creation failed",
-    });
-  }
-});
-
-// ── POST /api/payment/paystack/verify-order ───────────────────────────────────
-router.post("/paystack/verify-order", userValidator, async (req, res) => {
-  try {
-    const { reference } = req.body;
-    const uid = req.decode.uid;
-
-    const { secretKey } = await getPaystackKeys();
-
-    // verify with Paystack
-    const verifyRes = await fetchWithTimeout(
-      `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${secretKey}`,
-        },
-      },
-      15000,
-    );
-
-    const verifyData = await verifyRes.json();
-
-    if (!verifyData.status || verifyData.data.status !== "success") {
-      return res.json({ success: false, msg: "Payment not completed" });
-    }
-
-    const txData = verifyData.data;
-
-    // security: uid must match what we stored in metadata
-    if (String(txData.metadata?.uid) !== String(uid)) {
-      return res.json({ success: false, msg: "Unauthorized" });
-    }
-
-    const item = await getPurchaseItem({
-      productType: txData.metadata?.product_type || "plan",
-      productId:
-        txData.metadata?.product_type === "credit_package"
-          ? txData.metadata?.package_id
-          : txData.metadata?.plan_id,
-    });
-
-    // ── idempotency ───────────────────────────────────────────────────────────
-    const existing = await query(
-      `SELECT id FROM orders WHERE gateway = 'paystack' AND JSON_EXTRACT(meta, '$.reference') = ? LIMIT 1`,
-      [reference],
-    );
-    if (existing.length) {
-      return res.json({
-        success: true,
-        msg: "Plan already activated",
-        alreadyDone: true,
-      });
-    }
-
-    // ── save order ────────────────────────────────────────────────────────────
-    const order = await savePaidOrder({
-      uid,
-      item,
-      amount: txData.amount / 100,
-      gateway: "paystack",
-      meta: {
-        reference: reference,
-        transaction_id: String(txData.id),
-        channel: txData.channel,
-        payer_email: txData.customer?.email || null,
-        ...(txData.metadata?.billing_interval
-          ? { billing_interval: txData.metadata.billing_interval }
-          : {}),
-      },
-    });
-
-    const result = await fulfillPurchase(item, uid, {
-      gateway: "paystack",
-      amount: txData.amount / 100,
-      orderId: order.insertId,
-    });
-    if (!result.success) return res.json({ success: false, msg: result.msg });
-
-    res.json({
-      success: true,
-      msg: successMessage(item),
-      product_type: item.productType,
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Paystack verification failed",
-    });
-  }
-});
-
-// ── helper: get PayU keys ─────────────────────────────────────────────────────
-async function getPayUConfig() {
-  const data = await query(`SELECT * FROM web_private LIMIT 1`, []);
-  if (!data.length) throw new Error("No settings found");
-  const { payu_key, payu_salt, payu_mode, payu_active } = data[0];
-  if (!payu_active) throw new Error("PayU is not enabled");
-  if (!payu_key) throw new Error("PayU merchant key not configured");
-  if (!payu_salt) throw new Error("PayU salt not configured");
-  return {
-    key: payu_key,
-    salt: payu_salt,
-    mode: payu_mode === "live" ? "live" : "test",
-    paymentUrl:
-      payu_mode === "live"
-        ? "https://secure.payu.in/_payment"
-        : "https://test.payu.in/_payment",
-  };
-}
-
-function getPayURequestHash({ key, salt, txnid, amount, productinfo, firstname, email, udf1, udf2, udf3, udf4, udf5 }) {
-  const hashString = [
-    key,
-    txnid,
-    amount,
-    productinfo,
-    firstname,
-    email,
-    udf1 || "",
-    udf2 || "",
-    udf3 || "",
-    udf4 || "",
-    udf5 || "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    salt,
-  ].join("|");
-  return crypto.createHash("sha512").update(hashString).digest("hex");
-}
-
-function getPayUResponseHash(data, salt) {
-  const base = [
-    salt,
-    data.status || "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    data.udf5 || "",
-    data.udf4 || "",
-    data.udf3 || "",
-    data.udf2 || "",
-    data.udf1 || "",
-    data.email || "",
-    data.firstname || "",
-    data.productinfo || "",
-    data.amount || "",
-    data.txnid || "",
-    data.key || "",
-  ].join("|");
-  const hashString = data.additionalCharges
-    ? `${data.additionalCharges}|${base}`
-    : base;
-  return crypto.createHash("sha512").update(hashString).digest("hex");
-}
-
-function decodePayUMetadata(value) {
-  try {
-    if (!value) return {};
-    return JSON.parse(Buffer.from(String(value), "base64").toString("utf8"));
-  } catch {
-    return {};
-  }
-}
-
-// ── POST /api/payment/payu/create-order ───────────────────────────────────────
-router.post("/payu/create-order", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const item = await getPurchaseItem(getPurchaseInput(req.body));
-    const billingInterval = getPurchaseBillingInterval(
-      item,
-      req.body.billing_interval,
-    );
-    const amount = getPurchaseAmount(item, billingInterval);
-
-    const users = await query(`SELECT * FROM user WHERE uid = ? LIMIT 1`, [
-      uid,
-    ]);
-    if (!users.length)
-      return res.json({ success: false, msg: "User not found" });
-    const user = users[0];
-    if (!user.email)
-      return res.json({ success: false, msg: "User email is required" });
-
-    const payu = await getPayUConfig();
-    const appUrl = getConfiguredAppUrl();
-    const txnid = createPaymentReference("payu");
-    const payuExchangeRate = getPayUUsdToInrRate();
-    const payuAmount = getPayUInrAmount(amount).toFixed(2);
-    if (!Number.isFinite(parseFloat(payuAmount)) || parseFloat(payuAmount) <= 0) {
-      return res.json({ success: false, msg: "Invalid PayU amount" });
-    }
-    const productinfo = sanitizePayUField(item.title, "Purchase");
-    const firstname = sanitizePayUField(
-      user.name || user.email.split("@")[0],
-      "Customer",
-    );
-    const productId = String(item.packageId || item.planId);
-    const metadata = {
-      ...getPurchaseMetadata(item, uid),
-      ...(billingInterval ? { billing_interval: billingInterval } : {}),
-      usd_amount: amount,
-      payu_amount: payuAmount,
-      payu_currency: "INR",
-      payu_usd_to_inr_rate: payuExchangeRate,
-    };
-
-    const fields = {
-      key: payu.key,
-      txnid,
-      amount: payuAmount,
-      currency: "INR",
-      productinfo,
-      firstname,
-      email: user.email,
-      phone: getPayUPhone(user),
-      surl: `${appUrl}/api/payment/payu/success`,
-      furl: `${appUrl}/api/payment/payu/failure`,
-      service_provider: "payu_paisa",
-      udf1: String(uid),
-      udf2: item.productType,
-      udf3: productId,
-      udf4: billingInterval || "",
-      udf5: Buffer.from(JSON.stringify(metadata)).toString("base64"),
-    };
-    fields.hash = getPayURequestHash({ ...fields, salt: payu.salt });
-
-    res.json({
-      success: true,
-      url: payu.paymentUrl,
-      fields,
-      txnid,
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "PayU order creation failed",
-    });
-  }
-});
-
-async function handlePayUCallback(req, res, failed = false) {
-  try {
-    const payu = await getPayUConfig();
-    const body = { ...(req.query || {}), ...(req.body || {}) };
-    const appUrl = getConfiguredAppUrl();
-    const txnid = body.txnid;
-    const status = String(body.status || "").toLowerCase();
-    const productType = body.udf2 || "plan";
-    const productId = body.udf3;
-    const billingInterval = body.udf4 || null;
-    const uid = body.udf1;
-
-    if (!txnid || !body.hash) {
-      console.log("PayU callback missing data:", {
-        method: req.method,
-        contentType: req.headers["content-type"],
-        bodyKeys: Object.keys(req.body || {}),
-        queryKeys: Object.keys(req.query || {}),
-      });
-      return res.redirect(
-        `${appUrl}/checkout/success?gateway=payu&verified=0&error=missing_payment_data`,
-      );
-    }
-
-    const expectedHash = getPayUResponseHash(body, payu.salt);
-    if (expectedHash !== body.hash) {
-      return res.redirect(
-        `${appUrl}/checkout/success?gateway=payu&verified=0&error=invalid_hash`,
-      );
-    }
-
-    if (failed || status !== "success") {
-      return res.redirect(
-        `${appUrl}/checkout/success?gateway=payu&verified=0&error=payment_failed`,
-      );
-    }
-
-    const item = await getPurchaseItem({ productType, productId });
-    const normalizedBillingInterval = getPurchaseBillingInterval(
-      item,
-      billingInterval,
-    );
-    const requestMetadata = decodePayUMetadata(body.udf5);
-    const orderAmountUsd = parseFloat(
-      requestMetadata.usd_amount || getPurchaseAmount(item, normalizedBillingInterval),
-    );
-    const paidAmount = parseFloat(body.amount || 0);
-
-    const existing = await query(
-      `SELECT id FROM orders WHERE gateway = 'payu' AND JSON_EXTRACT(meta, '$.txnid') = ? LIMIT 1`,
-      [txnid],
-    );
-    if (!existing.length) {
-      const order = await savePaidOrder({
-        uid,
-        item,
-        amount: orderAmountUsd,
-        gateway: "payu",
-        meta: {
-          txnid,
-          mihpayid: body.mihpayid || null,
-          mode: body.mode || null,
-          status: body.status || null,
-          paid_amount: paidAmount,
-          paid_currency: "INR",
-          usd_amount: orderAmountUsd,
-          payu_usd_to_inr_rate: requestMetadata.payu_usd_to_inr_rate || null,
-          ...(normalizedBillingInterval
-            ? { billing_interval: normalizedBillingInterval }
-            : {}),
-        },
-      });
-
-      const result = await fulfillPurchase(item, uid, {
-        gateway: "payu",
-        amount: orderAmountUsd,
-        orderId: order.insertId,
-      });
-      if (!result.success) {
-        return res.redirect(
-          `${appUrl}/checkout/success?gateway=payu&verified=0&error=fulfillment_failed`,
-        );
-      }
-    }
-
-    return res.redirect(
-      `${appUrl}/checkout/success?gateway=payu&verified=1&product_type=${item.productType}&txnid=${encodeURIComponent(txnid)}`,
-    );
-  } catch (err) {
-    console.log(err);
-    const appUrl = getConfiguredAppUrl();
-    return res.redirect(
-      `${appUrl}/checkout/success?gateway=payu&verified=0&error=verification_failed`,
-    );
-  }
-}
-
-router.post("/payu/success", payuCallbackParser, (req, res) =>
-  handlePayUCallback(req, res),
-);
-router.post("/payu/failure", payuCallbackParser, (req, res) =>
-  handlePayUCallback(req, res, true),
-);
-router.get("/payu/success", (req, res) => handlePayUCallback(req, res));
-router.get("/payu/failure", (req, res) =>
-  handlePayUCallback(req, res, true),
-);
-
-// ── helper: get MercadoPago client ────────────────────────────────────────────
-async function getMercadoPagoClient() {
-  const data = await query(`SELECT * FROM web_private LIMIT 1`, []);
-  if (!data.length) throw new Error("No settings found");
-  const { pay_mercadopago_access_token, mercadopago_active } = data[0];
-  if (!mercadopago_active) throw new Error("Mercado Pago is not enabled");
-  if (!pay_mercadopago_access_token)
-    throw new Error("Mercado Pago access token not configured");
-
-  const client = new MercadoPagoConfig({
-    accessToken: pay_mercadopago_access_token,
-  });
-
-  return client;
-}
-
-// ── POST /api/payment/mercadopago/create-order ────────────────────────────────
-router.post("/mercadopago/create-order", userValidator, async (req, res) => {
-  try {
-    const uid = req.decode.uid;
-    const item = await getPurchaseItem(getPurchaseInput(req.body));
-    const billingInterval = getPurchaseBillingInterval(
-      item,
-      req.body.billing_interval,
-    );
-    const amount = getPurchaseAmount(item, billingInterval);
-
-    const users = await query(`SELECT * FROM user WHERE uid = ? LIMIT 1`, [
-      uid,
-    ]);
-    if (!users.length)
-      return res.json({ success: false, msg: "User not found" });
-    const user = users[0];
-
-    const client = await getMercadoPagoClient();
-    const { symbol, code, rate } = await getCurrency(req); // ← currency
-    const appUrl = process.env.APP_URL || "https://myavatarlab.com";
-    const preference = new Preference(client);
-
-    const localAmount = toLocalAmount(amount, rate);
-
-    const response = await preference.create({
-      body: {
-        items: [
-          {
-            id: String(item.planId || item.packageId),
-            title: item.title,
-            description: billingInterval
-              ? `${item.credits} credits · ${billingInterval}`
-              : item.description,
-            quantity: 1,
-            unit_price: localAmount, // ← converted
-            currency_id: code.toUpperCase(), // ← dynamic
-          },
-        ],
-        payer: { email: user.email },
-        metadata: {
-          ...getPurchaseMetadata(item, uid),
-          ...(billingInterval ? { billing_interval: billingInterval } : {}),
-        },
-        external_reference: `mp_${uid}_${item.productType}_${item.planId || item.packageId}_${Date.now()}`,
-        back_urls: {
-          success: `${appUrl}/checkout/success?gateway=mercadopago`,
-          failure: `${appUrl}${getCancelPath(item)}?cancelled=true`,
-          pending: `${appUrl}/checkout/success?gateway=mercadopago&pending=true`,
-        },
-        auto_return: "approved",
-      },
-    });
-
-    res.json({
-      success: true,
-      url: response.init_point,
-      preferenceId: response.id,
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Mercado Pago order creation failed",
-    });
-  }
-});
-
-// ── POST /api/payment/mercadopago/verify-order ────────────────────────────────
-router.post("/mercadopago/verify-order", userValidator, async (req, res) => {
-  try {
-    // Mercado Pago appends ?payment_id=xxx&status=approved&external_reference=xxx to success URL
-    const { payment_id, external_reference } = req.body;
-    const uid = req.decode.uid;
-
-    const client = await getMercadoPagoClient();
-    const payment = new Payment(client);
-
-    const paymentData = await payment.get({ id: payment_id });
-
-    // must be approved
-    if (paymentData.status !== "approved") {
-      return res.json({
-        success: false,
-        msg: `Payment status: ${paymentData.status}`,
-      });
-    }
-
-    // security: uid must match metadata
-    if (String(paymentData.metadata?.uid) !== String(uid)) {
-      return res.json({ success: false, msg: "Unauthorized" });
-    }
-
-    const item = await getPurchaseItem({
-      productType: paymentData.metadata?.product_type || "plan",
-      productId:
-        paymentData.metadata?.product_type === "credit_package"
-          ? paymentData.metadata?.package_id
-          : paymentData.metadata?.plan_id,
-    });
-
-    // ── idempotency ───────────────────────────────────────────────────────────
-    const existing = await query(
-      `SELECT id FROM orders WHERE gateway = 'mercadopago' AND JSON_EXTRACT(meta, '$.payment_id') = ? LIMIT 1`,
-      [String(payment_id)],
-    );
-    if (existing.length) {
-      return res.json({
-        success: true,
-        msg: "Plan already activated",
-        alreadyDone: true,
-      });
-    }
-
-    // ── save order ────────────────────────────────────────────────────────────
-    const order = await savePaidOrder({
-      uid,
-      item,
-      amount: paymentData.transaction_amount,
-      gateway: "mercadopago",
-      meta: {
-        payment_id: String(payment_id),
-        external_reference: external_reference,
-        payment_type: paymentData.payment_type_id,
-        payer_email: paymentData.payer?.email || null,
-        ...(paymentData.metadata?.billing_interval
-          ? { billing_interval: paymentData.metadata.billing_interval }
-          : {}),
-      },
-    });
-
-    const result = await fulfillPurchase(item, uid, {
-      gateway: "mercadopago",
-      amount: paymentData.transaction_amount,
-      orderId: order.insertId,
-    });
-    if (!result.success) return res.json({ success: false, msg: result.msg });
-
-    res.json({
-      success: true,
-      msg: successMessage(item),
-      product_type: item.productType,
-    });
-  } catch (err) {
-    console.log(err);
-    res.json({
-      success: false,
-      msg: err.message || "Mercado Pago verification failed",
-    });
-  }
-});
-
 // ── GET /api/payment/currency ─────────────────────────────────────────────────
 router.get("/currency", async (req, res) => {
   try {
@@ -1579,23 +700,6 @@ router.delete("/orders/:id", adminValidator, async (req, res) => {
     res.json({ success: true, msg: "Order deleted successfully" });
   } catch (err) {
     console.log(err);
-    res.json({ success: false, msg: err.message });
-  }
-});
-
-// ── GET /api/payment/offline-details ─────────────────────────────────────────
-router.get("/offline-details", async (req, res) => {
-  try {
-    const data = await query(`SELECT * FROM web_private LIMIT 1`, []);
-    if (!data.length)
-      return res.json({ success: true, active: false, html: "" });
-
-    res.json({
-      success: true,
-      active: !!data[0].offline_payment_active,
-      html: data[0].offline_payment_html || "",
-    });
-  } catch (err) {
     res.json({ success: false, msg: err.message });
   }
 });

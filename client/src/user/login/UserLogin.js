@@ -9,13 +9,11 @@ import {
   useTheme,
   useMediaQuery,
   Stack,
-  Divider,
   Skeleton,
   Chip,
   Tooltip,
 } from "@mui/material";
 import {
-  Google as GoogleIcon,
   EmailOutlined,
   Visibility,
   VisibilityOff,
@@ -28,7 +26,6 @@ import { TranslateContext } from "../../context/TranslateContext";
 import { useThemeData } from "../../context/ThemeContext";
 import { GlobalContext } from "../../context/GlobalContext";
 import { useHistory } from "react-router-dom/cjs/react-router-dom";
-import UserLoginGoogle from "./UserLoginGoogle";
 import ForgotPassword from "./ForgotPassword";
 
 // ── Demo credentials ────────────────────────────────────────────────────────
@@ -84,7 +81,13 @@ const UserLogin = () => {
       post: true,
       obj: state,
     });
-    if (res.data.success) {
+    if (res?.data?.emailVerificationRequired) {
+      const verifyEmail = res.data.email || state.email;
+      history.push(`/verify-email?email=${encodeURIComponent(verifyEmail)}`);
+      return;
+    }
+
+    if (res.data.success && res.data.token) {
       localStorage.setItem(
         process.env.REACT_APP_TOKEN + "_user",
         res.data.token,
@@ -409,26 +412,6 @@ const UserLogin = () => {
               </>
             )}
           </Box>
-
-          {/* ── Google Button ── */}
-          <UserLoginGoogle
-            hitAxios={hitAxios}
-            web={web}
-            referralCode={state.referral_code}
-          />
-
-          {/* ── Divider ── */}
-          <Stack direction="row" spacing={2} alignItems="center" my={3}>
-            <Divider sx={{ flex: 1 }} />
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              fontSize="0.8rem"
-            >
-              {lang.or || "or"}
-            </Typography>
-            <Divider sx={{ flex: 1 }} />
-          </Stack>
 
           {/* ── Email & Password ── */}
           <Stack spacing={2.5}>

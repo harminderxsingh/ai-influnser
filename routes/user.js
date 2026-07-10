@@ -8,7 +8,74 @@ const randomstring = require("randomstring");
 const { sign } = require("jsonwebtoken");
 const validateUser = require("../middlewares/user");
 const crypto = require("crypto");
-const { OAuth2Client } = require("google-auth-library"); // ← ADD THIS
+
+const DEFAULT_EMAIL_VERIFICATION_TEMPLATE = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+  <div style="background:#4f46e5;padding:28px 32px;">
+    <h2 style="color:#fff;margin:0;font-size:22px;">Verify your email</h2>
+  </div>
+  <div style="padding:28px 32px;background:#ffffff;">
+    <p style="color:#374151;font-size:15px;margin:0 0 16px;">Please verify your email address before accessing your account.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px;">
+      <tr style="background:#f9fafb;">
+        <td style="padding:8px 12px;color:#6b7280;font-weight:600;width:40%;">Email</td>
+        <td style="padding:8px 12px;color:#111827;">{{user_email}}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;color:#6b7280;font-weight:600;">Date</td>
+        <td style="padding:8px 12px;color:#111827;">{{date}}</td>
+      </tr>
+    </table>
+    <a href="{{verify_link}}" style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;">Verify Email</a>
+  </div>
+  <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e0e0e0;">
+    <p style="margin:0;font-size:12px;color:#9ca3af;">If you did not create this account, you can ignore this email.</p>
+  </div>
+</div>`;
+
+function renderTemplate(html, variables = {}) {
+  return String(html || "").replace(/{{\s*([^}]+)\s*}}/g, (match, key) =>
+    variables[key] !== undefined ? variables[key] : match,
+  );
+}
+
+function getFrontendBaseUrl(req) {
+  const env = getEnv();
+  return String(env?.frontendUrl || req.get("origin") || "").replace(/\/$/, "");
+}
+
+async function sendVerificationEmail({ req, email, token }) {
+  const verifyLink = `${getFrontendBaseUrl(req)}/verify-email?token=${token}`;
+  const [templateRow] = await query(
+    `SELECT email_template_email_verification FROM web_private LIMIT 1`,
+    [],
+  );
+  const html = renderTemplate(
+    templateRow?.email_template_email_verification ||
+      DEFAULT_EMAIL_VERIFICATION_TEMPLATE,
+    {
+      user_email: email,
+      verify_link: verifyLink,
+      date: new Date().toLocaleDateString(),
+    },
+  );
+
+  return sendEmail({
+    to: email,
+    subject: "Verify your email address",
+    html,
+  });
+}
+
+async function createAndSendVerificationEmail(req, user) {
+  const token = crypto.randomBytes(32).toString("hex");
+  await query(
+    `UPDATE user
+     SET email_verify_token = ?, email_verify_sent_at = NOW()
+     WHERE uid = ?`,
+    [token, user.uid],
+  );
+  return sendVerificationEmail({ req, email: user.email, token });
+}
 
 async function generateReferralCode() {
   for (let i = 0; i < 8; i += 1) {
@@ -108,90 +175,6 @@ async function applyReferralCredits({ uid, referralCode }) {
 }
 
 // ─────────────────────────────────────────────
-// Google Login — verifies token against Google's public keys
-// ─────────────────────────────────────────────
-router.post("/login_with_google", async (req, res) => {
-  try {
-    const { token, referral_code } = req.body;
-
-    const [web] = await query(`SELECT google_login_id FROM web_public`, []);
-    const clientId = web?.google_login_id;
-
-    if (!token || !clientId) {
-      return res.json({
-        success: false,
-        msg: "Token and clientId are required",
-      });
-    }
-
-    const client = new OAuth2Client(clientId);
-    let payload;
-    try {
-      const ticket = await client.verifyIdToken({
-        idToken: token,
-        audience: clientId,
-      });
-      payload = ticket.getPayload();
-    } catch (verifyErr) {
-      return res.json({ success: false, msg: "Invalid Google token" });
-    }
-
-    if (!payload?.email || !payload?.email_verified) {
-      return res.json({ success: false, msg: "Google email not verified" });
-    }
-
-    const email = payload.email;
-    const name = payload.name || email;
-    const env = getEnv();
-    const getUser = await query(`SELECT * FROM user WHERE email = ?`, [email]);
-
-    if (getUser?.length < 1) {
-      // ── New user ──
-      const uid = randomstring.generate();
-      const password = crypto.randomBytes(32).toString("hex");
-      const hasPass = await bcrypt.hash(password, 10);
-      const token_version = crypto.randomUUID();
-      const referralCode = await generateReferralCode();
-
-      await query(
-        `INSERT INTO user (name, uid, email, password, token_version, referral_code) VALUES (?,?,?,?,?,?)`,
-        [name, uid, email, hasPass, token_version, referralCode],
-      );
-      await applyReferralCredits({ uid, referralCode: referral_code });
-
-      const loginToken = sign(
-        { uid, role: "user", email, token_version },
-        env?.jwt,
-        {},
-      );
-      return res.json({ token: loginToken, success: true });
-    } else {
-      // ── Existing user ──
-      const token_version = crypto.randomUUID();
-      await query(`UPDATE user SET token_version = ? WHERE uid = ?`, [
-        token_version,
-        getUser[0].uid,
-      ]);
-
-      const loginToken = sign(
-        {
-          uid: getUser[0].uid,
-          role: "user",
-          email: getUser[0].email,
-          token_version,
-        },
-        env?.jwt,
-        {},
-      );
-      return res.json({ success: true, token: loginToken });
-    }
-  } catch (err) {
-    console.log(err);
-    res.json({ success: false, msg: "Something went wrong", err });
-  }
-});
-
-// ─────────────────────────────────────────────
 // Login / Signup
 // ─────────────────────────────────────────────
 router.post("/login", async (req, res) => {
@@ -221,39 +204,45 @@ router.post("/login", async (req, res) => {
       const token_version = crypto.randomUUID();
       const referralCode = await generateReferralCode();
 
+      const verifyToken = crypto.randomBytes(32).toString("hex");
       await query(
-        `INSERT INTO user (uid, email, password, token_version, referral_code) VALUES (?,?,?,?,?)`,
-        [uid, email, haspass, token_version, referralCode],
+        `INSERT INTO user
+         (uid, email, password, token_version, referral_code, email_verified, email_verify_token, email_verify_sent_at)
+         VALUES (?,?,?,?,?,0,?,NOW())`,
+        [uid, email, haspass, token_version, referralCode, verifyToken],
       );
       await applyReferralCredits({ uid, referralCode: referral_code });
-
-      const token = sign(
-        { uid, role: "user", email, token_version },
-        env?.jwt,
-        {},
-      );
-
-      // ── Send Welcome Email ──
-      const [templateRow] = await query(
-        `SELECT email_template_welcome FROM web_private LIMIT 1`,
-        [],
-      );
-      let html = templateRow?.email_template_welcome || "";
-      html = html
-        .replace(/\{\{user_email\}\}/g, email)
-        .replace(/\{\{date\}\}/g, new Date().toLocaleDateString());
-      await sendEmail({
-        to: email,
-        subject: "Welcome! Your account has been created",
-        html,
+      const sendResult = await sendVerificationEmail({
+        req,
+        email,
+        token: verifyToken,
       });
 
-      return res.json({ success: true, token });
+      return res.json({
+        success: true,
+        emailVerificationRequired: true,
+        email,
+        msg: sendResult?.success
+          ? "Please verify your email. We sent a verification link to your inbox."
+          : `Account created, but verification email could not be sent: ${sendResult?.msg}`,
+      });
     } else {
       // ── Existing User Login ──
       const compare = await bcrypt.compare(password, user?.password);
       if (!compare) {
         return res.json({ msg: "Invalid credentials" });
+      }
+
+      if (Number(user.email_verified ?? 1) !== 1) {
+        const sendResult = await createAndSendVerificationEmail(req, user);
+        return res.json({
+          success: false,
+          emailVerificationRequired: true,
+          email: user.email,
+          msg: sendResult?.success
+            ? "Please verify your email. We sent a new verification link."
+            : `Please verify your email. Could not send email: ${sendResult?.msg}`,
+        });
       }
 
       const token_version = crypto.randomUUID();
@@ -272,6 +261,102 @@ router.post("/login", async (req, res) => {
   } catch (err) {
     console.log(err);
     res.json({ msg: "Something went wrong", err, success: false });
+  }
+});
+
+router.post("/verify_email", async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.json({ success: false, msg: "Verification token is required" });
+    }
+
+    const [user] = await query(
+      `SELECT uid, email FROM user WHERE email_verify_token = ? LIMIT 1`,
+      [token],
+    );
+
+    if (!user) {
+      return res.json({
+        success: false,
+        msg: "Invalid or expired verification link",
+      });
+    }
+
+    await query(
+      `UPDATE user
+       SET email_verified = 1,
+           email_verify_token = NULL,
+           email_verify_sent_at = NULL
+       WHERE uid = ?`,
+      [user.uid],
+    );
+
+    const [templateRow] = await query(
+      `SELECT email_template_welcome FROM web_private LIMIT 1`,
+      [],
+    );
+    if (templateRow?.email_template_welcome) {
+      const html = renderTemplate(templateRow.email_template_welcome, {
+        user_email: user.email,
+        login_url: `${getFrontendBaseUrl(req)}/user/login`,
+        date: new Date().toLocaleDateString(),
+      });
+      await sendEmail({
+        to: user.email,
+        subject: "Welcome! Your account has been verified",
+        html,
+      });
+    }
+
+    return res.json({
+      success: true,
+      msg: "Email verified successfully. You can login now.",
+    });
+  } catch (err) {
+    console.log(err);
+    return res.json({ success: false, msg: "Something went wrong", err });
+  }
+});
+
+router.post("/resend_verification_email", async (req, res) => {
+  try {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email || !validateEmail(email)) {
+      return res.json({ success: false, msg: "Please enter a valid email" });
+    }
+
+    const [user] = await query(`SELECT * FROM user WHERE email = ? LIMIT 1`, [
+      email,
+    ]);
+
+    if (!user) {
+      return res.json({
+        success: true,
+        msg: "If this email is registered and unverified, a verification link will be sent.",
+      });
+    }
+
+    if (Number(user.email_verified ?? 1) === 1) {
+      return res.json({
+        success: true,
+        alreadyVerified: true,
+        msg: "Email is already verified. Please login.",
+      });
+    }
+
+    const sendResult = await createAndSendVerificationEmail(req, user);
+    if (!sendResult?.success) {
+      return res.json({ success: false, msg: sendResult?.msg });
+    }
+
+    return res.json({
+      success: true,
+      msg: "Verification link sent. Please check your inbox.",
+    });
+  } catch (err) {
+    console.log(err);
+    return res.json({ success: false, msg: "Something went wrong", err });
   }
 });
 
@@ -473,8 +558,9 @@ router.post("/update_profile", validateUser, async (req, res) => {
     }
 
     const userFromToken = req.decode.user;
+    const emailChanged = userFromToken?.email !== email;
 
-    if (userFromToken?.email !== email) {
+    if (emailChanged) {
       const [checkUser] = await query(`SELECT * FROM user WHERE email = ?`, [
         email,
       ]);
@@ -487,6 +573,29 @@ router.post("/update_profile", validateUser, async (req, res) => {
       const hashPass = await bcrypt.hash(newPassword, 10);
       const token_version = crypto.randomUUID(); // ← rotate on password change
       const env = getEnv();
+
+      if (emailChanged) {
+        const verifyToken = crypto.randomBytes(32).toString("hex");
+        await query(
+          `UPDATE user
+           SET name = ?,
+               email = ?,
+               password = ?,
+               token_version = ?,
+               email_verified = 0,
+               email_verify_token = ?,
+               email_verify_sent_at = NOW()
+           WHERE uid = ?`,
+          [name, email, hashPass, token_version, verifyToken, req.decode.uid],
+        );
+        await sendVerificationEmail({ req, email, token: verifyToken });
+        return res.json({
+          success: true,
+          emailVerificationRequired: true,
+          email,
+          msg: "Profile updated. Please verify your new email before continuing.",
+        });
+      }
 
       await query(
         `UPDATE user SET name = ?, email = ?, password = ?, token_version = ? WHERE uid = ?`,
@@ -505,6 +614,27 @@ router.post("/update_profile", validateUser, async (req, res) => {
         token: newToken,
       });
     } else {
+      if (emailChanged) {
+        const verifyToken = crypto.randomBytes(32).toString("hex");
+        await query(
+          `UPDATE user
+           SET name = ?,
+               email = ?,
+               email_verified = 0,
+               email_verify_token = ?,
+               email_verify_sent_at = NOW()
+           WHERE uid = ?`,
+          [name, email, verifyToken, req.decode.uid],
+        );
+        await sendVerificationEmail({ req, email, token: verifyToken });
+        return res.json({
+          success: true,
+          emailVerificationRequired: true,
+          email,
+          msg: "Profile updated. Please verify your new email before continuing.",
+        });
+      }
+
       await query(`UPDATE user SET name = ?, email = ? WHERE uid = ?`, [
         name,
         email,

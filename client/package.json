@@ -9,7 +9,6 @@
     "@mui/lab": "^5.0.0-alpha.177",
     "@mui/material": "^5.18.0",
     "@mui/x-data-grid": "^5.17.26",
-    "@react-oauth/google": "^0.12.2",
     "axios": "^1.13.6",
     "buffer": "^6.0.3",
     "lodash": "^4.17.21",

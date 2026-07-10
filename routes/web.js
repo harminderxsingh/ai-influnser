@@ -567,30 +567,7 @@ router.post("/fill_contact_us", async (req, res) => {
   }
 });
 
-// get social login data
-router.get("/get_social_login_admin", async (req, res) => {
-  try {
-    const [data] = await query(`SELECT google_login_id FROM web_public`, []);
-    res.json({ data, success: true });
-  } catch (err) {
-    res.json({ success: false, msg: "Something went wrong", err });
-    console.log(err);
-  }
-});
-
-router.post("/update_social_login_data", adminValidator, async (req, res) => {
-  try {
-    const { google_login_id } = req.body;
-    await query(`UPDATE web_public SET google_login_id = ?`, [google_login_id]);
-
-    res.json({ msg: "Updated successfully", success: true });
-  } catch (err) {
-    res.json({ success: false, msg: "Something went wrong", err });
-    console.log(err);
-  }
-});
-
-// del one lang
+// verfy license
 router.post("/del-one-translation", adminValidator, async (req, res) => {
   try {
     const cirDir = process.cwd();

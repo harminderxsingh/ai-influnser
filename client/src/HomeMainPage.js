@@ -26,6 +26,7 @@ import PasswordRecovery from "./frontend/PasswordRecovery";
 import AdminPasswordRecovery from "./frontend/AdminPasswordRecovery";
 import NotFoundPage from "./frontend/NotFoundPage";
 import LaunchpadPage from "./frontend/LaunchpadPage";
+import VerifyEmail from "./frontend/VerifyEmail";
 
 const HomeMainPage = () => {
   const GLOBAL_CONTEXT = React.useContext(GlobalContext);
@@ -129,6 +130,7 @@ const HomeMainPage = () => {
           <PublicRoute path="/checkout/:id" exact component={CheckOut} />
           <PublicRoute path="/launchpad" exact component={LaunchpadPage} />
           <PublicRoute path="/launchpad/:slug" exact component={LaunchpadPage} />
+          <PublicRoute path="/verify-email" exact component={VerifyEmail} />
           <PublicRoute
             path="/password-recovery"
             exact

@@ -24,14 +24,11 @@ import {
   VisibilityOutlined,
   VisibilityOffOutlined,
   PaymentOutlined,
-  CreditCardOutlined,
-  AccountBalanceWalletOutlined,
   ReceiptLongOutlined,
 } from "@mui/icons-material";
 import { GlobalContext } from "../../context/GlobalContext";
 import PageHeader from "../../common/PageHeader";
 
-// ── Reusable SectionCard ────────────────────────────────────────────────────
 const SectionCard = ({ icon: Icon, title, children }) => {
   const theme = useTheme();
   return (
@@ -69,7 +66,6 @@ const SectionCard = ({ icon: Icon, title, children }) => {
   );
 };
 
-// ── Masked secret field ─────────────────────────────────────────────────────
 const MaskedField = ({ label, value, onChange, name, placeholder }) => {
   const [show, setShow] = React.useState(false);
   return (
@@ -102,7 +98,6 @@ const MaskedField = ({ label, value, onChange, name, placeholder }) => {
   );
 };
 
-// ── Main Component ──────────────────────────────────────────────────────────
 const PaymentGateway = ({ lang }) => {
   const { hitAxios } = React.useContext(GlobalContext);
   const [state, setState] = React.useState({});
@@ -169,7 +164,6 @@ const PaymentGateway = ({ lang }) => {
 
   return (
     <Box>
-      {/* ── PAGE HEADER ── */}
       <PageHeader
         title={lang?.paymentGateway || "Payment Gateways"}
         subtitle={
@@ -198,140 +192,50 @@ const PaymentGateway = ({ lang }) => {
       />
 
       <Grid container spacing={3}>
-        {/* ── LEFT COLUMN ── */}
         <Grid item xs={12} lg={6}>
-          <Stack spacing={3}>
-            {/* STRIPE */}
-            <SectionCard
-              icon={CreditCardOutlined}
-              title={lang?.stripe || "Stripe"}
-            >
-              <Stack spacing={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={state?.stripe_active === 1}
-                      onChange={(e) =>
-                        set("stripe_active", e.target.checked ? 1 : 0)
-                      }
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableGateway || "Enable Gateway"}
-                    </Typography>
-                  }
-                />
-                <Divider />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label={lang?.stripePublishableKey || "Publishable Key"}
-                  placeholder="pk_live_..."
-                  value={state?.pay_stripe_id || ""}
-                  onChange={(e) => set("pay_stripe_id", e.target.value)}
-                />
-                <MaskedField
-                  label={lang?.stripeSecretKey || "Secret Key"}
-                  placeholder="sk_live_..."
-                  value={state?.pay_stripe_key}
-                  onChange={set}
-                  name="pay_stripe_key"
-                />
-              </Stack>
-            </SectionCard>
-
-            {/* RAZORPAY */}
-            <SectionCard
-              icon={PaymentOutlined}
-              title={lang?.razorpay || "Razorpay"}
-            >
-              <Stack spacing={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={state?.rz_active === 1}
-                      onChange={(e) =>
-                        set("rz_active", e.target.checked ? 1 : 0)
-                      }
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableGateway || "Enable Gateway"}
-                    </Typography>
-                  }
-                />
-                <Divider />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label={lang?.razorpayKeyId || "Key ID"}
-                  placeholder="rzp_live_..."
-                  value={state?.rz_id || ""}
-                  onChange={(e) => set("rz_id", e.target.value)}
-                />
-                <MaskedField
-                  label={lang?.razorpayKeySecret || "Key Secret"}
-                  placeholder="Your Razorpay secret"
-                  value={state?.rz_key}
-                  onChange={set}
-                  name="rz_key"
-                />
-              </Stack>
-            </SectionCard>
-
-            {/* MERCADO PAGO */}
-            <SectionCard
-              icon={AccountBalanceWalletOutlined}
-              title={lang?.mercadopago || "Mercado Pago"}
-            >
-              <Stack spacing={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={state?.mercadopago_active === 1}
-                      onChange={(e) =>
-                        set("mercadopago_active", e.target.checked ? 1 : 0)
-                      }
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableGateway || "Enable Gateway"}
-                    </Typography>
-                  }
-                />
-                <Divider />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label={lang?.mercadopagoPublicKey || "Public Key"}
-                  placeholder="APP_USR-..."
-                  value={state?.pay_mercadopago_public_key || ""}
-                  onChange={(e) =>
-                    set("pay_mercadopago_public_key", e.target.value)
-                  }
-                />
-                <MaskedField
-                  label={lang?.mercadopagoAccessToken || "Access Token"}
-                  placeholder="APP_USR-..."
-                  value={state?.pay_mercadopago_access_token}
-                  onChange={set}
-                  name="pay_mercadopago_access_token"
-                />
-              </Stack>
-            </SectionCard>
-          </Stack>
+          <SectionCard
+            icon={PaymentOutlined}
+            title={lang?.razorpay || "Razorpay"}
+          >
+            <Stack spacing={2}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={state?.rz_active === 1}
+                    onChange={(e) =>
+                      set("rz_active", e.target.checked ? 1 : 0)
+                    }
+                    color="primary"
+                  />
+                }
+                label={
+                  <Typography variant="body2" fontWeight={500}>
+                    {lang?.enableGateway || "Enable Gateway"}
+                  </Typography>
+                }
+              />
+              <Divider />
+              <TextField
+                fullWidth
+                size="small"
+                label={lang?.razorpayKeyId || "Key ID"}
+                placeholder="rzp_live_..."
+                value={state?.rz_id || ""}
+                onChange={(e) => set("rz_id", e.target.value)}
+              />
+              <MaskedField
+                label={lang?.razorpayKeySecret || "Key Secret"}
+                placeholder="Your Razorpay secret"
+                value={state?.rz_key}
+                onChange={set}
+                name="rz_key"
+              />
+            </Stack>
+          </SectionCard>
         </Grid>
 
-        {/* ── RIGHT COLUMN ── */}
         <Grid item xs={12} lg={6}>
           <Stack spacing={3}>
-            {/* PAYPAL */}
             <SectionCard
               icon={PaymentOutlined}
               title={lang?.paypal || "PayPal"}
@@ -394,104 +298,6 @@ const PaymentGateway = ({ lang }) => {
               </Stack>
             </SectionCard>
 
-            {/* PAYSTACK */}
-            <SectionCard
-              icon={CreditCardOutlined}
-              title={lang?.paystack || "Paystack"}
-            >
-              <Stack spacing={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={state?.paystack_active === 1}
-                      onChange={(e) =>
-                        set("paystack_active", e.target.checked ? 1 : 0)
-                      }
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableGateway || "Enable Gateway"}
-                    </Typography>
-                  }
-                />
-                <Divider />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label={lang?.paystackPublicKey || "Public Key"}
-                  placeholder="pk_live_..."
-                  value={state?.pay_paystack_id || ""}
-                  onChange={(e) => set("pay_paystack_id", e.target.value)}
-                />
-                <MaskedField
-                  label={lang?.paystackSecretKey || "Secret Key"}
-                  placeholder="sk_live_..."
-                  value={state?.pay_paystack_key}
-                  onChange={set}
-                  name="pay_paystack_key"
-                />
-              </Stack>
-            </SectionCard>
-
-            {/* PAYU */}
-            <SectionCard
-              icon={AccountBalanceWalletOutlined}
-              title={lang?.payu || "PayU"}
-            >
-              <Stack spacing={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={state?.payu_active === 1}
-                      onChange={(e) =>
-                        set("payu_active", e.target.checked ? 1 : 0)
-                      }
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableGateway || "Enable Gateway"}
-                    </Typography>
-                  }
-                />
-                <Divider />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label={lang?.payuMerchantKey || "Merchant Key"}
-                  placeholder="PayU merchant key"
-                  value={state?.payu_key || ""}
-                  onChange={(e) => set("payu_key", e.target.value)}
-                />
-                <MaskedField
-                  label={lang?.payuSalt || "Salt"}
-                  placeholder="PayU salt"
-                  value={state?.payu_salt}
-                  onChange={set}
-                  name="payu_salt"
-                />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label={lang?.payuMode || "Mode"}
-                  helperText={
-                    lang?.payuModeHint || "Use test for sandbox, live for production"
-                  }
-                  value={state?.payu_mode || "test"}
-                  onChange={(e) =>
-                    set(
-                      "payu_mode",
-                      e.target.value === "live" ? "live" : "test",
-                    )
-                  }
-                />
-              </Stack>
-            </SectionCard>
-
-            {/* ── OFFLINE PAYMENT ── */}
             <SectionCard
               icon={ReceiptLongOutlined}
               title={lang?.offlinePayment || "Offline Payment"}
@@ -502,42 +308,56 @@ const PaymentGateway = ({ lang }) => {
                     <Switch
                       checked={state?.offline_payment_active === 1}
                       onChange={(e) =>
-                        set("offline_payment_active", e.target.checked ? 1 : 0)
+                        set(
+                          "offline_payment_active",
+                          e.target.checked ? 1 : 0,
+                        )
                       }
                       color="primary"
                     />
                   }
                   label={
                     <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableGateway || "Enable Gateway"}
+                      {lang?.enableOfflinePayment || "Enable Offline Payment"}
                     </Typography>
                   }
                 />
                 <Divider />
-                <Typography variant="caption" color="text.secondary">
-                  {lang?.offlinePaymentHtmlHint ||
-                    "Enter the HTML instructions shown to users when they choose offline payment (e.g. bank details, UPI ID, instructions)."}
-                </Typography>
                 <TextField
                   fullWidth
                   multiline
-                  rows={8}
+                  minRows={6}
                   size="small"
-                  label={
-                    lang?.offlinePaymentHtml || "Payment Instructions (HTML)"
+                  label={lang?.offlinePaymentHtml || "Offline Payment HTML"}
+                  placeholder={
+                    lang?.offlinePaymentHtmlHint ||
+                    "Bank details, UPI, or payment instructions"
                   }
-                  placeholder="<p>Please transfer to bank account: <strong>XXXX-XXXX</strong></p>"
                   value={state?.offline_payment_html || ""}
-                  onChange={(e) => set("offline_payment_html", e.target.value)}
-                  inputProps={{
-                    style: { fontFamily: "monospace", fontSize: 12 },
-                  }}
+                  onChange={(e) =>
+                    set("offline_payment_html", e.target.value)
+                  }
                 />
               </Stack>
             </SectionCard>
           </Stack>
         </Grid>
       </Grid>
+
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={closeSnack}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={closeSnack}
+          severity={snack.severity}
+          sx={{ width: "100%" }}
+        >
+          {snack.msg}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

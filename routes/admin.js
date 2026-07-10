@@ -691,7 +691,8 @@ router.get("/get_email_templates", adminValidator, async (req, res) => {
   try {
     const rows = await query(
       `SELECT email_template_welcome, email_template_pass_recovery,
-              email_template_usage_update, email_template_plan_activation
+              email_template_usage_update, email_template_plan_activation,
+              email_template_email_verification
        FROM web_private LIMIT 1`,
       [],
     );
@@ -710,6 +711,7 @@ router.post("/save_email_templates", adminValidator, async (req, res) => {
       email_template_pass_recovery,
       email_template_usage_update,
       email_template_plan_activation,
+      email_template_email_verification,
     } = req.body;
 
     const existing = await query(`SELECT id FROM web_private LIMIT 1`, []);
@@ -720,13 +722,15 @@ router.post("/save_email_templates", adminValidator, async (req, res) => {
            email_template_welcome = ?,
            email_template_pass_recovery = ?,
            email_template_usage_update = ?,
-           email_template_plan_activation = ?
+           email_template_plan_activation = ?,
+           email_template_email_verification = ?
          WHERE id = ?`,
         [
           email_template_welcome || null,
           email_template_pass_recovery || null,
           email_template_usage_update || null,
           email_template_plan_activation || null,
+          email_template_email_verification || null,
           existing[0].id,
         ],
       );
@@ -734,13 +738,15 @@ router.post("/save_email_templates", adminValidator, async (req, res) => {
       await query(
         `INSERT INTO web_private
            (email_template_welcome, email_template_pass_recovery,
-            email_template_usage_update, email_template_plan_activation)
-         VALUES (?,?,?,?)`,
+            email_template_usage_update, email_template_plan_activation,
+            email_template_email_verification)
+         VALUES (?,?,?,?,?)`,
         [
           email_template_welcome || null,
           email_template_pass_recovery || null,
           email_template_usage_update || null,
           email_template_plan_activation || null,
+          email_template_email_verification || null,
         ],
       );
     }

@@ -380,10 +380,9 @@ router.get(
           otherData = {};
         }
 
-        if (!otherData.auto_influencer_photo) {
-          otherData.auto_influencer_photo = row.generated_video;
-        }
-        otherData.auto_stage = "showcase";
+        otherData.auto_stage = "showcase_video";
+        delete otherData.auto_influencer_photo;
+        delete otherData.auto_influencer_job_id;
 
         await query(
           `UPDATE product_content
@@ -396,25 +395,6 @@ router.get(
           [JSON.stringify(otherData), row.id, req.decode.uid],
         );
 
-        await triggerProductShowcase(row.id);
-      }
-
-      const autoRowsToProcess = await query(
-        `SELECT id
-         FROM product_content
-         WHERE uid = ?
-           AND status IN ('processing', 'submitting')
-           AND (
-             other LIKE '%"auto_mode":true%'
-             OR other LIKE '%"influencer_mode":"auto"%'
-           )
-         ORDER BY updated_at ASC
-         LIMIT 5`,
-        [req.decode.uid],
-      );
-
-      for (const row of autoRowsToProcess) {
-        await triggerProductShowcase(row.id);
       }
 
       const data = await query(

@@ -142,6 +142,23 @@ async function recoverStaleSubmissions() {
     [],
   );
 
+  await query(
+    `UPDATE product_content
+     SET status = 'processing',
+         job_id = NULL,
+         error_message = NULL
+     WHERE status IN ('processing', 'submitting')
+       AND (
+         other LIKE '%"auto_stage":"influencer_photo"%'
+         OR other LIKE '%"auto_influencer_job_id"%'
+       )
+       AND (
+         other LIKE '%"auto_mode":true%'
+         OR other LIKE '%"influencer_mode":"auto"%'
+       )`,
+    [],
+  );
+
   const brokenAutoRows = await query(
     `SELECT id, other, generated_video
      FROM product_content
@@ -158,10 +175,9 @@ async function recoverStaleSubmissions() {
 
   for (const row of brokenAutoRows) {
     const otherData = parseOther(row.other);
-    if (!otherData.auto_influencer_photo) {
-      otherData.auto_influencer_photo = row.generated_video;
-    }
-    otherData.auto_stage = "showcase";
+    otherData.auto_stage = "showcase_video";
+    delete otherData.auto_influencer_photo;
+    delete otherData.auto_influencer_job_id;
 
     await query(
       `UPDATE product_content
@@ -247,22 +263,6 @@ function isVideoFileName(fileName = "") {
   return /\.(mp4|mov|webm|m4v)$/i.test(String(fileName).split("?")[0]);
 }
 
-function isAutoInfluencerJob(otherData = {}, jobId) {
-  if (otherData.auto_stage === "influencer_photo") return true;
-  if (
-    otherData.auto_influencer_job_id &&
-    otherData.auto_influencer_job_id === jobId
-  ) {
-    return true;
-  }
-
-  return (
-    (isTruthyAutoFlag(otherData.auto_mode) ||
-      otherData.influencer_mode === "auto") &&
-    !otherData.auto_influencer_photo
-  );
-}
-
 function shouldUseAutoInfluencer(otherData = {}, model, storedInfluencer = null) {
   if (
     isTruthyAutoFlag(otherData.auto_mode) ||
@@ -292,24 +292,6 @@ async function saveOther(id, otherData, status = "processing") {
      WHERE id = ?`,
     [JSON.stringify(otherData), status, id],
   );
-}
-
-function buildAutoInfluencerPrompt(analysis = {}) {
-  const productType = analysis.product_type || "product";
-  const audience = analysis.target_audience || "modern online shoppers";
-  const style =
-    analysis.influencer_prompt ||
-    `A photorealistic lifestyle influencer suitable for promoting a ${productType}`;
-
-  return `${style}. The influencer should look trustworthy, polished, brand-safe, and natural for ${audience}. Professional studio ad photography, detailed face, realistic hands, clean outfit, sharp focus, premium social media campaign style.`;
-}
-
-function buildAutoInfluencerPromptFromText(userPrompt = "") {
-  const productContext = userPrompt?.trim()
-    ? ` Product/ad context: ${userPrompt.trim()}`
-    : "";
-
-  return `${buildAutoInfluencerPrompt({})}${productContext} Create only the influencer portrait/photo, not the product ad video.`;
 }
 
 function buildAutoShowcasePrompt(analysis = {}, userPrompt = "") {
@@ -385,22 +367,6 @@ async function submitShowcaseVideoJob(item, provider, fee, otherData, influencer
     aspectRatio = "9:16";
   }
 
-  let modelImageUrl;
-  try {
-    const modelImagePath = `${__dirname}/../client/public/media/${influencer.photo_url}`;
-    modelImageUrl = await uploadFileToProvider(modelImagePath, apiKey);
-    console.log(`📎 product_content #${id} model image URL: ${modelImageUrl}`);
-  } catch (err) {
-    await setContentError(id, `Model image upload failed: ${err.message}`);
-    await logUsage({
-      uid,
-      task: "product_showcase_maker",
-      status: "error",
-      des: `product_content #${id} — model image upload failed: ${err.message}`,
-    });
-    return;
-  }
-
   let productImageUrl;
   try {
     const productImagePath = `${__dirname}/../client/public/media/${ref_photo}`;
@@ -421,6 +387,24 @@ async function submitShowcaseVideoJob(item, provider, fee, otherData, influencer
       des: `product_content #${id} — product image upload failed: ${err.message}`,
     });
     return;
+  }
+
+  let modelImageUrl = productImageUrl;
+  if (influencer?.photo_url) {
+    try {
+      const modelImagePath = `${__dirname}/../client/public/media/${influencer.photo_url}`;
+      modelImageUrl = await uploadFileToProvider(modelImagePath, apiKey);
+      console.log(`📎 product_content #${id} model image URL: ${modelImageUrl}`);
+    } catch (err) {
+      await setContentError(id, `Model image upload failed: ${err.message}`);
+      await logUsage({
+        uid,
+        task: "product_showcase_maker",
+        status: "error",
+        des: `product_content #${id} — model image upload failed: ${err.message}`,
+      });
+      return;
+    }
   }
 
   const reserved = otherData.credits_reserved
@@ -451,7 +435,7 @@ async function submitShowcaseVideoJob(item, provider, fee, otherData, influencer
     otherData.influencer_mode === "auto"
       ? otherData.vision_analysis
         ? buildAutoShowcasePrompt(otherData.vision_analysis, prompt)
-        : buildSelectedShowcasePrompt(prompt)
+        : buildShowcasePrompt(prompt)
       : buildSelectedShowcasePrompt(prompt);
 
   const create = await createJob(provider, "showcase", {
@@ -516,98 +500,6 @@ async function processProductShowcase(item, provider, fee) {
   const otherData = parseOther(other);
 
   if (job_id) {
-    if (isAutoInfluencerJob(otherData, job_id)) {
-      let result;
-
-      try {
-        result = await fetchJobStatus(provider, "txt2img", job_id);
-      } catch (err) {
-        console.error(
-          `❌ fetchJobStatus crashed for product_content #${id} auto influencer:`,
-          err.message,
-        );
-        await logUsage({
-          uid,
-          task: "product_showcase_maker",
-          status: "error",
-          des: `fetchJobStatus crashed for product_content #${id} auto influencer: ${err.message}`,
-        });
-        return;
-      }
-
-      if (result.status === "pending") {
-        await touchProductStatusCheck(id);
-        return;
-      }
-
-      if (result.status === "error") {
-        await refundCredits(uid, fee);
-        await setContentError(
-          id,
-          `Auto influencer generation failed: ${result.msg}`,
-        );
-        await logUsage({
-          uid,
-          task: "product_showcase_maker",
-          credits: fee,
-          status: "refunded",
-          des: `product_content #${id} auto influencer failed — ${fee}cr refunded. Reason: ${result.msg}`,
-        });
-        return;
-      }
-
-      let savedInfluencerPhoto;
-      try {
-        savedInfluencerPhoto = await downloadImage(
-          result.data,
-          `${__dirname}/../client/public/media`,
-        );
-      } catch (err) {
-        await refundCredits(uid, fee);
-        await setContentError(
-          id,
-          `Auto influencer download failed: ${err.message}`,
-        );
-        await logUsage({
-          uid,
-          task: "product_showcase_maker",
-          credits: fee,
-          status: "refunded",
-          des: `product_content #${id} auto influencer download failed — ${fee}cr refunded. Error: ${err.message}`,
-        });
-        return;
-      }
-
-      if (!savedInfluencerPhoto) {
-        await refundCredits(uid, fee);
-        await setContentError(id, "Auto influencer download returned empty path");
-        await logUsage({
-          uid,
-          task: "product_showcase_maker",
-          credits: fee,
-          status: "refunded",
-          des: `product_content #${id} auto influencer download returned empty — ${fee}cr refunded`,
-        });
-        return;
-      }
-
-      otherData.auto_influencer_photo = savedInfluencerPhoto;
-      otherData.auto_influencer_job_id = job_id;
-      otherData.auto_stage = "showcase";
-      await saveOtherAndJob(id, otherData, null, "processing");
-      await submitShowcaseVideoJob(
-        { ...item, job_id: null },
-        provider,
-        fee,
-        otherData,
-        {
-          name: "Auto AI Influencer",
-          photo_url: savedInfluencerPhoto,
-        },
-      );
-      return;
-    }
-
     let result;
 
     try {
@@ -860,61 +752,13 @@ async function processProductShowcase(item, provider, fee) {
       }
 
       otherData.credits_reserved = true;
-      await saveOther(id, otherData, "processing");
+      await saveOther(id, otherData, "submitting");
     }
 
-    if (!otherData.auto_influencer_photo) {
-      if (otherData.auto_influencer_job_id) {
-        otherData.auto_stage = "influencer_photo";
-        await saveOtherAndJob(
-          id,
-          otherData,
-          otherData.auto_influencer_job_id,
-          "processing",
-        );
-        return;
-      }
-
-      const createInfluencer = await createJob(provider, "txt2img", {
-        prompt: buildAutoInfluencerPromptFromText(
-          otherData.user_prompt || prompt,
-        ),
-      });
-
-      if (createInfluencer.status === "error") {
-        await refundCredits(uid, fee);
-        await setContentError(
-          id,
-          `Auto influencer job creation failed: ${createInfluencer.msg}`,
-        );
-        await logUsage({
-          uid,
-          task: "product_showcase_maker",
-          credits: fee,
-          status: "refunded",
-          des: `product_content #${id} auto influencer create failed — ${fee}cr refunded. Reason: ${createInfluencer.msg}`,
-        });
-        return;
-      }
-
-      otherData.auto_influencer_job_id = createInfluencer.taskId;
-      otherData.auto_stage = "influencer_photo";
-      await saveOtherAndJob(id, otherData, createInfluencer.taskId, "processing");
-      await logUsage({
-        uid,
-        task: "product_showcase_maker",
-        credits: fee,
-        status: "processing",
-        des: `product_content #${id} auto influencer job submitted — taskId: ${createInfluencer.taskId}`,
-      });
-      return;
-    }
-
-    influencer = {
-      name: "Auto AI Influencer",
-      photo_url: otherData.auto_influencer_photo,
-    };
-    await submitShowcaseVideoJob(item, provider, fee, otherData, influencer);
+    otherData.auto_stage = "showcase_video";
+    delete otherData.auto_influencer_photo;
+    delete otherData.auto_influencer_job_id;
+    await submitShowcaseVideoJob(item, provider, fee, otherData, null);
     return;
   } else {
     influencer = storedInfluencer;

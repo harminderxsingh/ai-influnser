@@ -46,8 +46,8 @@ const RazorpayComp = ({
       post: true,
       obj: withCountry(
         productType === "credit_package"
-          ? { product_type: productType, package_id: plan.id }
-          : { plan_id: plan.id },
+          ? { product_type: productType, package_id: plan.id, country: "IN" }
+          : { plan_id: plan.id, country: "IN" },
       ),
     });
 
@@ -62,16 +62,40 @@ const RazorpayComp = ({
       currency,
       keyId,
       plan: planMeta,
+      isTestMode,
     } = res.data;
+
+    if (isTestMode) {
+      console.info(
+        "Razorpay test mode: use Indian test card 5267 3181 8797 5449 or UPI success@razorpay. International cards are not supported.",
+      );
+    }
 
     // 3. open Razorpay modal
     const options = {
       key: keyId,
       amount: amount,
-      currency: currency,
+      currency: currency || "INR",
       name: planMeta.title,
       description: planMeta.description,
       order_id: orderId,
+
+      method: {
+        upi: true,
+        card: true,
+        netbanking: true,
+        wallet: true,
+        emi: false,
+        paylater: false,
+      },
+
+      config: {
+        display: {
+          preferences: {
+            show_default_blocks: true,
+          },
+        },
+      },
 
       handler: async function (response) {
         // 4. verify on backend after user pays
@@ -117,8 +141,17 @@ const RazorpayComp = ({
     const rzp = new window.Razorpay(options);
 
     rzp.on("payment.failed", function (response) {
+      const description = response.error?.description || "Payment failed";
       console.log("Razorpay payment failed:", response.error);
-      alert(response.error?.description || "Payment failed");
+      if (/international card/i.test(description)) {
+        alert(
+          isTestMode
+            ? "International cards are not supported in Razorpay test mode. Please use Indian test card 5267 3181 8797 5449 (any CVV/expiry) or UPI: success@razorpay."
+            : "International cards are not supported. Please pay with an Indian card, UPI, or netbanking.",
+        );
+      } else {
+        alert(description);
+      }
       setPaying("");
     });
 

@@ -74,6 +74,16 @@ function getUsdToInrRate() {
   return Number.isFinite(configuredRate) && configuredRate > 0 ? configuredRate : 85;
 }
 
+function getRazorpayCurrency() {
+  return {
+    symbol: "₹",
+    code: "INR",
+    rate: getUsdToInrRate(),
+    base: "USD",
+    country: "IN",
+  };
+}
+
 function getPurchaseInput(body = {}) {
   const productType =
     body.product_type === "credit_package" || body.package_id
@@ -488,11 +498,11 @@ router.post("/razorpay/create-order", userValidator, async (req, res) => {
     const amount = getPurchaseAmount(item, billingInterval);
 
     const { instance, rz_id } = await getRazorpayInstance();
-    const { symbol, code, rate } = await getCurrency(req); // ← currency
+    const { code, rate } = getRazorpayCurrency();
 
     const order = await instance.orders.create({
-      amount: toSmallestUnit(amount, rate, code), // ← converted
-      currency: code.toUpperCase(), // ← dynamic
+      amount: toSmallestUnit(amount, rate, code),
+      currency: "INR",
       receipt: createRazorpayReceipt(),
       notes: {
         ...getPurchaseMetadata(item, uid),
@@ -506,6 +516,7 @@ router.post("/razorpay/create-order", userValidator, async (req, res) => {
       amount: order.amount,
       currency: order.currency,
       keyId: rz_id,
+      isTestMode: String(rz_id || "").startsWith("rzp_test_"),
       plan: {
         title: item.title,
         description: billingInterval
@@ -565,7 +576,8 @@ router.post("/razorpay/verify-order", userValidator, async (req, res) => {
       getPurchaseInput({ plan_id, package_id, product_type }),
     );
     const billingInterval = getPurchaseBillingInterval(item, billing_interval);
-    const amount = parseFloat(getPurchaseAmount(item, billingInterval));
+    const { rate } = getRazorpayCurrency();
+    const amount = toLocalAmount(getPurchaseAmount(item, billingInterval), rate);
 
     const order = await savePaidOrder({
       uid,

@@ -399,6 +399,24 @@ router.get(
         await triggerProductShowcase(row.id);
       }
 
+      const autoRowsToProcess = await query(
+        `SELECT id
+         FROM product_content
+         WHERE uid = ?
+           AND status IN ('processing', 'submitting')
+           AND (
+             other LIKE '%"auto_mode":true%'
+             OR other LIKE '%"influencer_mode":"auto"%'
+           )
+         ORDER BY updated_at ASC
+         LIMIT 5`,
+        [req.decode.uid],
+      );
+
+      for (const row of autoRowsToProcess) {
+        await triggerProductShowcase(row.id);
+      }
+
       const data = await query(
         `SELECT * FROM product_content WHERE uid = ? ORDER BY created_at DESC`,
         [req.decode.uid],

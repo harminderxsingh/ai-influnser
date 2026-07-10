@@ -166,13 +166,19 @@ router.post(
 
       let modelData = null;
       if (useSelectedInfluencer) {
-        [modelData] = await query(`SELECT * FROM influencers WHERE id = ?`, [
-          model_id,
-        ]);
+        [modelData] = await query(
+          `SELECT * FROM influencers
+           WHERE id = ?
+             AND uid = ?
+             AND status = 'active'
+             AND photo_url IS NOT NULL
+             AND photo_url <> ''`,
+          [model_id, uid],
+        );
 
         if (!modelData) {
           return res.json({
-            msg: "Selected model does not exist",
+            msg: "Selected influencer is not ready yet. Please choose an active influencer with a photo.",
             success: false,
           });
         }

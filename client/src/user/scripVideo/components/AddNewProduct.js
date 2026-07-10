@@ -64,6 +64,19 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
   });
 
   const theme = useTheme();
+  const availableModels = React.useMemo(
+    () => inf.filter((model) => model.status === "active" && model.photo_url),
+    [inf],
+  );
+
+  React.useEffect(() => {
+    if (
+      state.selectedModel &&
+      !availableModels.some((model) => model.id === state.selectedModel.id)
+    ) {
+      setState((prev) => ({ ...prev, selectedModel: null }));
+    }
+  }, [availableModels, state.selectedModel]);
 
   const steps = [
     lang.influencer || "Influencer",
@@ -78,6 +91,8 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
   ];
 
   const handleSelectModel = (model) => {
+    if (model.status !== "active" || !model.photo_url) return;
+
     setState({
       ...state,
       selectedModel: state.selectedModel?.id === model.id ? null : model,
@@ -351,17 +366,26 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
 
               {/* Model Grid */}
               {state.influencerMode === "select" && (
-                <Grid container spacing={2.5}>
-                  {inf.map((model) => (
-                    <Grid item xs={6} sm={4} md={3} key={model.id}>
-                      <ModelCard
-                        model={model}
-                        isSelected={state.selectedModel?.id === model.id}
-                        onSelect={() => handleSelectModel(model)}
-                      />
+                <>
+                  {availableModels.length === 0 ? (
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      {lang.noReadyInfluencers ||
+                        "No active influencers with photos found. Please create or wait for an influencer to finish first."}
+                    </Alert>
+                  ) : (
+                    <Grid container spacing={2.5}>
+                      {availableModels.map((model) => (
+                        <Grid item xs={6} sm={4} md={3} key={model.id}>
+                          <ModelCard
+                            model={model}
+                            isSelected={state.selectedModel?.id === model.id}
+                            onSelect={() => handleSelectModel(model)}
+                          />
+                        </Grid>
+                      ))}
                     </Grid>
-                  ))}
-                </Grid>
+                  )}
+                </>
               )}
 
               {/* Selected Info */}
@@ -931,7 +955,9 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                     state.isSubmitting ||
                     (state.step === 0 &&
                       state.influencerMode === "select" &&
-                      !state.selectedModel) ||
+                      (!state.selectedModel ||
+                        state.selectedModel.status !== "active" ||
+                        !state.selectedModel.photo_url)) ||
                     (state.step === 1 && !state.productImage)
                   }
                   endIcon={<ArrowForwardOutlined />}

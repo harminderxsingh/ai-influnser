@@ -255,6 +255,13 @@ function buildAutoShowcasePrompt(analysis = {}, userPrompt = "") {
   );
 }
 
+function buildSelectedShowcasePrompt(userPrompt = "") {
+  return buildShowcasePrompt(
+    userPrompt?.trim() ||
+      "Create a realistic UGC ad where the influencer naturally presents the uploaded product.",
+  );
+}
+
 async function notifyUser(user, { task, des, status }) {
   if (!user?.email) return;
   try {
@@ -717,7 +724,7 @@ async function processProductShowcase(item, provider, fee) {
     await saveOther(id, otherData, "submitting");
   }
 
-  if (!otherData.vision_analysis) {
+  if (isAutoProductFlow && !otherData.vision_analysis) {
     const vision = await analyzeProductImage(provider, productImageUrl);
     if (vision.status === "error") {
       await refundCredits(uid, fee);
@@ -752,7 +759,9 @@ async function processProductShowcase(item, provider, fee) {
   const create = await createJob(provider, "showcase", {
     image_url_1: modelImageUrl,
     image_url_2: productImageUrl,
-    text: buildAutoShowcasePrompt(otherData.vision_analysis, finalPrompt),
+    text: isAutoProductFlow
+      ? buildAutoShowcasePrompt(otherData.vision_analysis, finalPrompt)
+      : buildSelectedShowcasePrompt(finalPrompt),
     aspect_ratio: aspectRatio,
     generation_type: "REFERENCE_2_VIDEO",
   });

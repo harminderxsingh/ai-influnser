@@ -5,7 +5,7 @@ const {
   logUsage,
   sendUsageUpdateEmail,
 } = require("../utils/common");
-const { fetchJobStatus, createJob, analyzeProductImage } = require("./api");
+const { fetchJobStatus, createJob } = require("./api");
 const { frontendUrl } = require("../config.json");
 const {
   buildShowcasePrompt,
@@ -92,6 +92,15 @@ async function touchProductStatusCheck(id) {
        AND job_id IS NOT NULL
        AND job_id <> ''`,
     [id],
+  );
+}
+
+async function saveOtherAndJob(id, otherData, jobId = null, status = "processing") {
+  await query(
+    `UPDATE product_content
+     SET other = ?, job_id = ?, status = ?
+     WHERE id = ?`,
+    [JSON.stringify(otherData), jobId, status, id],
   );
 }
 
@@ -231,6 +240,14 @@ function buildAutoInfluencerPrompt(analysis = {}) {
   return `${style}. The influencer should look trustworthy, polished, brand-safe, and natural for ${audience}. Professional studio ad photography, detailed face, realistic hands, clean outfit, sharp focus, premium social media campaign style.`;
 }
 
+function buildAutoInfluencerPromptFromText(userPrompt = "") {
+  const productContext = userPrompt?.trim()
+    ? ` Product/ad context: ${userPrompt.trim()}`
+    : "";
+
+  return `${buildAutoInfluencerPrompt({})}${productContext} Create only the influencer portrait/photo, not the product ad video.`;
+}
+
 function buildAutoShowcasePrompt(analysis = {}, userPrompt = "") {
   const base = userPrompt?.trim() || analysis.ad_prompt || "";
   const productName =
@@ -287,8 +304,91 @@ async function uploadFileToProvider(localPath, _apiKey) {
 
 async function processProductShowcase(item, provider, fee) {
   const { id, uid, job_id, model, ref_photo, prompt, other } = item;
+  const otherData = parseOther(other);
 
   if (job_id) {
+    if (otherData.auto_stage === "influencer_photo") {
+      let result;
+
+      try {
+        result = await fetchJobStatus(provider, "txt2img", job_id);
+      } catch (err) {
+        console.error(
+          `❌ fetchJobStatus crashed for product_content #${id} auto influencer:`,
+          err.message,
+        );
+        await logUsage({
+          uid,
+          task: "product_showcase_maker",
+          status: "error",
+          des: `fetchJobStatus crashed for product_content #${id} auto influencer: ${err.message}`,
+        });
+        return;
+      }
+
+      if (result.status === "pending") {
+        await touchProductStatusCheck(id);
+        return;
+      }
+
+      if (result.status === "error") {
+        await refundCredits(uid, fee);
+        await setContentError(
+          id,
+          `Auto influencer generation failed: ${result.msg}`,
+        );
+        await logUsage({
+          uid,
+          task: "product_showcase_maker",
+          credits: fee,
+          status: "refunded",
+          des: `product_content #${id} auto influencer failed — ${fee}cr refunded. Reason: ${result.msg}`,
+        });
+        return;
+      }
+
+      let savedInfluencerPhoto;
+      try {
+        savedInfluencerPhoto = await downloadImage(
+          result.data,
+          `${__dirname}/../client/public/media`,
+        );
+      } catch (err) {
+        await refundCredits(uid, fee);
+        await setContentError(
+          id,
+          `Auto influencer download failed: ${err.message}`,
+        );
+        await logUsage({
+          uid,
+          task: "product_showcase_maker",
+          credits: fee,
+          status: "refunded",
+          des: `product_content #${id} auto influencer download failed — ${fee}cr refunded. Error: ${err.message}`,
+        });
+        return;
+      }
+
+      if (!savedInfluencerPhoto) {
+        await refundCredits(uid, fee);
+        await setContentError(id, "Auto influencer download returned empty path");
+        await logUsage({
+          uid,
+          task: "product_showcase_maker",
+          credits: fee,
+          status: "refunded",
+          des: `product_content #${id} auto influencer download returned empty — ${fee}cr refunded`,
+        });
+        return;
+      }
+
+      otherData.auto_influencer_photo = savedInfluencerPhoto;
+      otherData.auto_influencer_job_id = job_id;
+      otherData.auto_stage = "showcase";
+      await saveOtherAndJob(id, otherData, null, "processing");
+      return;
+    }
+
     let result;
 
     try {
@@ -483,7 +583,6 @@ async function processProductShowcase(item, provider, fee) {
     return;
   }
 
-  const otherData = parseOther(other);
   const storedInfluencer = parseInfluencer(model);
   const isAutoProductFlow = shouldUseAutoInfluencer(
     otherData,
@@ -501,9 +600,7 @@ async function processProductShowcase(item, provider, fee) {
 
   if (isAutoProductFlow) {
     const productImagePath = `${__dirname}/../client/public/media/${ref_photo}`;
-    const productImageUrlForVision = await uploadFileToProvider(
-      productImagePath,
-    );
+    await uploadFileToProvider(productImagePath);
 
     if (!otherData.credits_reserved) {
       const reserved = await reserveCredits(uid, fee);
@@ -526,66 +623,22 @@ async function processProductShowcase(item, provider, fee) {
       await saveOther(id, otherData, "processing");
     }
 
-    if (!otherData.vision_analysis) {
-      const vision = await analyzeProductImage(provider, productImageUrlForVision);
-      if (vision.status === "error") {
-        await refundCredits(uid, fee);
-        await setContentError(id, `Product vision analysis failed: ${vision.msg}`);
-        await logUsage({
-          uid,
-          task: "product_showcase_maker",
-          credits: fee,
-          status: "refunded",
-          des: `product_content #${id} vision analysis failed — ${fee}cr refunded. Reason: ${vision.msg}`,
-        });
-        return;
-      }
-
-      otherData.vision_analysis = vision.data;
-      await saveOther(id, otherData, "processing");
-      return;
-    }
-
     if (!otherData.auto_influencer_photo) {
       if (otherData.auto_influencer_job_id) {
-        const result = await fetchJobStatus(
-          provider,
-          "txt2img",
+        otherData.auto_stage = "influencer_photo";
+        await saveOtherAndJob(
+          id,
+          otherData,
           otherData.auto_influencer_job_id,
+          "processing",
         );
-
-        if (result.status === "pending") {
-          await saveOther(id, otherData, "processing");
-          return;
-        }
-
-        if (result.status === "error") {
-          await refundCredits(uid, fee);
-          await setContentError(
-            id,
-            `Auto influencer generation failed: ${result.msg}`,
-          );
-          await logUsage({
-            uid,
-            task: "product_showcase_maker",
-            credits: fee,
-            status: "refunded",
-            des: `product_content #${id} auto influencer failed — ${fee}cr refunded. Reason: ${result.msg}`,
-          });
-          return;
-        }
-
-        const savedInfluencerPhoto = await downloadImage(
-          result.data,
-          `${__dirname}/../client/public/media`,
-        );
-        otherData.auto_influencer_photo = savedInfluencerPhoto;
-        await saveOther(id, otherData, "processing");
         return;
       }
 
       const createInfluencer = await createJob(provider, "txt2img", {
-        prompt: buildAutoInfluencerPrompt(otherData.vision_analysis),
+        prompt: buildAutoInfluencerPromptFromText(
+          otherData.user_prompt || prompt,
+        ),
       });
 
       if (createInfluencer.status === "error") {
@@ -605,7 +658,15 @@ async function processProductShowcase(item, provider, fee) {
       }
 
       otherData.auto_influencer_job_id = createInfluencer.taskId;
-      await saveOther(id, otherData, "processing");
+      otherData.auto_stage = "influencer_photo";
+      await saveOtherAndJob(id, otherData, createInfluencer.taskId, "processing");
+      await logUsage({
+        uid,
+        task: "product_showcase_maker",
+        credits: fee,
+        status: "processing",
+        des: `product_content #${id} auto influencer job submitted — taskId: ${createInfluencer.taskId}`,
+      });
       return;
     }
 
@@ -613,7 +674,9 @@ async function processProductShowcase(item, provider, fee) {
       name: "Auto AI Influencer",
       photo_url: otherData.auto_influencer_photo,
     };
-    finalPrompt = buildAutoShowcasePrompt(otherData.vision_analysis, prompt);
+    finalPrompt = otherData.vision_analysis
+      ? buildAutoShowcasePrompt(otherData.vision_analysis, prompt)
+      : buildSelectedShowcasePrompt(prompt);
   } else {
     influencer = storedInfluencer;
 
@@ -703,26 +766,6 @@ async function processProductShowcase(item, provider, fee) {
   if (!otherData.credits_reserved) {
     otherData.credits_reserved = true;
     await saveOther(id, otherData, "submitting");
-  }
-
-  if (isAutoProductFlow && !otherData.vision_analysis) {
-    const vision = await analyzeProductImage(provider, productImageUrl);
-    if (vision.status === "error") {
-      await refundCredits(uid, fee);
-      await setContentError(id, `Product vision analysis failed: ${vision.msg}`);
-      await logUsage({
-        uid,
-        task: "product_showcase_maker",
-        credits: fee,
-        status: "refunded",
-        des: `product_content #${id} vision analysis failed — ${fee}cr refunded. Reason: ${vision.msg}`,
-      });
-      return;
-    }
-
-    otherData.vision_analysis = vision.data;
-    await saveOther(id, otherData, "processing");
-    return;
   }
 
   const freshBeforeCreate = await getFreshRow(id);

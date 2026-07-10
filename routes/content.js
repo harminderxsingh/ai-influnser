@@ -130,10 +130,17 @@ router.post(
   checkPlan,
   async (req, res) => {
     try {
-      const { model_id, model_name, prompt, aspect_ratio, submission_key } =
-        req.body;
+      const {
+        model_id,
+        model_name,
+        prompt,
+        aspect_ratio,
+        submission_key,
+        influencer_mode,
+      } = req.body;
       const submissionKey = normalizeSubmissionKey(submission_key);
       const uid = req.decode.uid;
+      const useSelectedInfluencer = influencer_mode === "select" && model_id;
 
       if (!req.files || !req.files.product_image) {
         return res.json({
@@ -158,7 +165,7 @@ router.post(
       }
 
       let modelData = null;
-      if (model_id) {
+      if (useSelectedInfluencer) {
         [modelData] = await query(`SELECT * FROM influencers WHERE id = ?`, [
           model_id,
         ]);
@@ -214,7 +221,8 @@ router.post(
       // Prepare other data JSON
       const otherData = {
         aspect_ratio: aspect_ratio || "9:16",
-        auto_mode: !modelData,
+        influencer_mode: useSelectedInfluencer ? "select" : "auto",
+        auto_mode: !useSelectedInfluencer,
         product_image_name: req.files.product_image.name,
         user_prompt: promptText,
       };

@@ -98,6 +98,25 @@ async function touchProductStatusCheck(id) {
 async function recoverStaleSubmissions() {
   await query(
     `UPDATE product_content
+     SET status = 'processing', error_message = NULL
+     WHERE status = 'error'
+       AND error_message = 'Influencer has no photo'
+       AND (
+         model IS NULL
+         OR model = ''
+         OR model = 'null'
+         OR model = '{}'
+         OR other LIKE '%"auto_mode":true%'
+         OR other LIKE '%"auto_mode":1%'
+         OR other LIKE '%"auto_mode":"true"%'
+         OR other LIKE '%"influencer_mode":"auto"%'
+         OR other NOT LIKE '%"influencer_mode":"select"%'
+       )`,
+    [],
+  );
+
+  await query(
+    `UPDATE product_content
      SET status = 'processing'
      WHERE status = 'submitting'
        AND job_id IS NOT NULL
@@ -162,6 +181,46 @@ function parseOther(raw) {
   } catch {
     return {};
   }
+}
+
+function parseInfluencer(raw) {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+
+  const value = String(raw).trim();
+  if (!value || value === "null" || value === "{}") return null;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function isTruthyAutoFlag(value) {
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+
+function shouldUseAutoInfluencer(otherData = {}, model, storedInfluencer = null) {
+  if (otherData.influencer_mode === "select") {
+    return false;
+  }
+
+  if (
+    isTruthyAutoFlag(otherData.auto_mode) ||
+    otherData.influencer_mode === "auto"
+  ) {
+    return true;
+  }
+
+  if (!model) return true;
+
+  const rawModel = String(model).trim();
+  if (!rawModel || rawModel === "null" || rawModel === "{}") {
+    return true;
+  }
+
+  return !storedInfluencer?.photo_url;
 }
 
 async function saveOther(id, otherData, status = "processing") {
@@ -429,7 +488,20 @@ async function processProductShowcase(item, provider, fee) {
   }
 
   const otherData = parseOther(other);
-  const isAutoProductFlow = otherData.auto_mode || !model;
+  const storedInfluencer = parseInfluencer(model);
+  const isExplicitSelectMode = otherData.influencer_mode === "select";
+  const isAutoProductFlow = shouldUseAutoInfluencer(
+    otherData,
+    model,
+    storedInfluencer,
+  );
+
+  if (isAutoProductFlow) {
+    otherData.auto_mode = true;
+    if (!otherData.influencer_mode) {
+      otherData.influencer_mode = "auto";
+    }
+  }
 
   let influencer;
   let finalPrompt = prompt;
@@ -550,27 +622,24 @@ async function processProductShowcase(item, provider, fee) {
     };
     finalPrompt = buildAutoShowcasePrompt(otherData.vision_analysis, prompt);
   } else {
-    try {
-      influencer = typeof model === "string" ? JSON.parse(model) : model;
-    } catch (err) {
-      await setContentError(id, "Invalid model JSON");
-      await logUsage({
-        uid,
-        task: "product_showcase_maker",
-        status: "error",
-        des: `product_content #${id} — failed to parse model JSON: ${err.message}`,
-      });
-      return;
-    }
+    influencer = storedInfluencer;
 
     if (!influencer?.photo_url) {
-      await setContentError(id, "Influencer has no photo");
-      await logUsage({
-        uid,
-        task: "product_showcase_maker",
-        status: "error",
-        des: `product_content #${id} — influencer has no photo_url`,
-      });
+      if (isExplicitSelectMode) {
+        await setContentError(id, "Influencer has no photo");
+        await logUsage({
+          uid,
+          task: "product_showcase_maker",
+          status: "error",
+          des: `product_content #${id} — influencer has no photo_url`,
+        });
+        return;
+      }
+
+      otherData.auto_mode = true;
+      otherData.influencer_mode = "auto";
+      await saveOther(id, otherData, "processing");
+      await releaseProductClaim(id);
       return;
     }
   }

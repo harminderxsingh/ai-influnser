@@ -7,6 +7,7 @@ import TopBar from "./TopBar";
 import Content from "./Content";
 import {
   Dashboard as DashboardIcon,
+  Face2,
   Collections,
   SlowMotionVideo,
   EmergencyRecording,
@@ -46,6 +47,11 @@ const UserDashboard = () => {
       text: lang?.dashboards || "Dashboards",
       icon: <DashboardIcon />,
       // submenu: [{ id: "dashboard", text: lang?.dashboard || "Dashboard" }],
+    },
+    {
+      id: "influencers",
+      text: lang?.influencers || "Influencers",
+      icon: <Face2 />,
     },
     {
       id: "social-publishing-history",

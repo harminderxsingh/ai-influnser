@@ -128,6 +128,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
       formData.append("model_id", state.selectedModel.id);
       formData.append("model_name", state.selectedModel.name);
     }
+    formData.append("influencer_mode", state.influencerMode);
     formData.append("product_image", state.productImage);
     formData.append("prompt", state.prompt);
     formData.append("aspect_ratio", state.aspectRatio);

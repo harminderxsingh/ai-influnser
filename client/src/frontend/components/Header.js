@@ -24,7 +24,7 @@ import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 function scrollToSection(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  const offset = 70;
+  const offset = 96;
   const top = el.getBoundingClientRect().top + window.scrollY - offset;
   window.scrollTo({ top, behavior: "smooth" });
 }
@@ -91,6 +91,30 @@ const Header = ({ web: webProp }) => {
 
   const siteName = web?.site_name || "ReelAI";
   const logoUrl = web?.site_logo ? `/media/${web.site_logo}` : null;
+  const ab = config.appBar || {};
+  const n = (v, fallback) => {
+    const x = Number(v);
+    return Number.isFinite(x) && x > 0 ? x : fallback;
+  };
+  const logoH = {
+    xs: n(ab.logoHeightXs, 56),
+    sm: n(ab.logoHeightSm, 64),
+    md: n(ab.logoHeightMd, 72),
+  };
+  const logoMaxW = {
+    xs: n(ab.logoMaxWidthXs, 200),
+    sm: n(ab.logoMaxWidthSm, 240),
+    md: n(ab.logoMaxWidthMd, 280),
+  };
+  const logoMinW = {
+    xs: n(ab.logoMinWidthXs, 120),
+    md: n(ab.logoMinWidthMd, 140),
+  };
+  // App bar height from config; keep room for logo
+  const barHeight = Math.max(
+    n(ab.height, 64),
+    logoUrl ? logoH.md + 16 : 64,
+  );
 
   const ThemeToggleButton = () => (
     <IconButton
@@ -128,7 +152,7 @@ const Header = ({ web: webProp }) => {
           backdropFilter: trigger ? `blur(${config.glass_blur})` : "none",
           borderBottom: trigger ? `1px solid ${borderColor}` : "none",
           transition: `all ${config.transition_duration} ${config.transition_easing}`,
-          height: config.appBar.height,
+          height: barHeight,
           justifyContent: "center",
         }}
       >
@@ -138,7 +162,7 @@ const Header = ({ web: webProp }) => {
             width: "100%",
             mx: "auto",
             px: { xs: 2, md: 3 },
-            minHeight: `${config.appBar.height}px !important`,
+            minHeight: `${barHeight}px !important`,
             justifyContent: "space-between",
           }}
         >
@@ -149,8 +173,10 @@ const Header = ({ web: webProp }) => {
             sx={{
               display: "flex",
               alignItems: "center",
-              gap: 1,
+              gap: 1.25,
               textDecoration: "none",
+              flexShrink: 0,
+              minWidth: 0,
             }}
           >
             {logoUrl ? (
@@ -159,9 +185,23 @@ const Header = ({ web: webProp }) => {
                 src={logoUrl}
                 alt={siteName}
                 sx={{
-                  height: { xs: 46, md: 56 },
-                  maxWidth: { xs: 170, md: 220 },
+                  height: {
+                    xs: logoH.xs,
+                    sm: logoH.sm,
+                    md: logoH.md,
+                  },
+                  width: "auto",
+                  maxWidth: {
+                    xs: logoMaxW.xs,
+                    sm: logoMaxW.sm,
+                    md: logoMaxW.md,
+                  },
+                  minWidth: {
+                    xs: logoMinW.xs,
+                    md: logoMinW.md,
+                  },
                   objectFit: "contain",
+                  objectPosition: "left center",
                   display: "block",
                 }}
               />

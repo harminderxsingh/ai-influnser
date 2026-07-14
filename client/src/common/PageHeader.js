@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Typography, useTheme, alpha, useMediaQuery } from "@mui/material";
+import { usePanelChrome } from "../utils/usePanelChrome";
 
 const PageHeader = ({
   title,
@@ -13,6 +14,7 @@ const PageHeader = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const chrome = usePanelChrome(240);
 
   return (
     <Box
@@ -22,18 +24,11 @@ const PageHeader = ({
         backgroundColor: backgroundColor || theme.palette.background.paper,
         borderRadius: 2,
         border: gradientBorder
-          ? "0.5px solid transparent"
+          ? `1px solid ${theme.palette.divider}`
           : `1px solid ${theme.palette.divider}`,
-        backgroundImage: gradientBorder
-          ? `linear-gradient(${backgroundColor || theme.palette.background.paper}, ${backgroundColor || theme.palette.background.paper}), linear-gradient(90deg, #A78BFA, #EC4899, #F97316)`
-          : "none",
-        backgroundOrigin: "border-box",
-        backgroundClip: gradientBorder
-          ? "padding-box, border-box"
-          : "padding-box",
+        ...chrome.pageHeaderSx,
       }}
     >
-      {/* Header Content */}
       <Box
         sx={{
           display: "flex",
@@ -43,7 +38,6 @@ const PageHeader = ({
           gap: 2,
         }}
       >
-        {/* Left Side - Title & Subtitle */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           {Icon && (
             <Box
@@ -52,19 +46,33 @@ const PageHeader = ({
                 height: { xs: 40, sm: 50 },
                 borderRadius: 2,
                 background: gradientIcon
-                  ? "linear-gradient(135deg, #A78BFA 0%, #EC4899 50%, #F97316 100%)"
+                  ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
                   : alpha(theme.palette.primary.main, 0.1),
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: gradientIcon ? "white" : theme.palette.primary.main,
+                ...chrome.pageHeaderIconSx,
               }}
             >
               <Icon sx={{ fontSize: { xs: 24, sm: 28 } }} />
             </Box>
           )}
           <Box>
-            <Typography variant="h5">{title}</Typography>
+            <Typography
+              variant="h5"
+              sx={{
+                fontFamily: chrome.fontFamily || undefined,
+                ...(chrome.variant === "editorial"
+                  ? { fontFamily: '"Playfair Display", Georgia, serif' }
+                  : {}),
+                ...(chrome.variant === "cyber" || chrome.variant === "sharp"
+                  ? { letterSpacing: "0.04em", textTransform: "uppercase" }
+                  : {}),
+              }}
+            >
+              {title}
+            </Typography>
             {subtitle && (
               <Typography
                 variant="body2"
@@ -79,7 +87,6 @@ const PageHeader = ({
           </Box>
         </Box>
 
-        {/* Right Side - Action Buttons */}
         <Box
           sx={{
             display: "flex",
@@ -88,10 +95,7 @@ const PageHeader = ({
             width: { xs: "100%", sm: "auto" },
           }}
         >
-          {/* Render secondary actions (can be Button, Stack, or any component) */}
           {secondaryActions}
-
-          {/* Render primary action (can be Button or any component) */}
           {primaryAction}
         </Box>
       </Box>

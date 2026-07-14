@@ -16,6 +16,7 @@ import {
 } from "@mui/icons-material";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import ProfileDialog from "./ProfileDialog";
+import { usePanelChrome } from "../../utils/usePanelChrome";
 
 const TopBar = ({
   lang,
@@ -31,6 +32,7 @@ const TopBar = ({
     .replace(/-/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
   const history = useHistory();
+  const chrome = usePanelChrome(260);
 
   return (
     <>
@@ -62,7 +64,7 @@ const TopBar = ({
                   component="img"
                   src={`/media/${web?.site_logo}`}
                   alt={web?.site_name || "Logo"}
-                  sx={{ height: 40, objectFit: "contain", cursor: "pointer" }}
+                  sx={{ height: 100, objectFit: "contain", cursor: "pointer" }}
                 />
               ) : (
                 <Typography variant="subtitle1" fontWeight={700}>
@@ -88,6 +90,7 @@ const TopBar = ({
             px: 3,
             pt: 3,
             pb: 0,
+            ...chrome.topBarSx,
           }}
         >
           {/* Breadcrumb */}

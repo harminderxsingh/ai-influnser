@@ -359,179 +359,11 @@ const queries = [
     check: "SHOW TABLES LIKE 'ai_providers';",
   },
   {
-    run: `INSERT INTO ai_providers (
-            name,
-            provider_key,
-            is_active,
-            is_default,
-
-            -- TEXT TO IMAGE
-            txt2img_enabled,
-            txt2img_base_url,
-            txt2img_api_key,
-            txt2img_auth_type,
-            txt2img_auth_header_key,
-            txt2img_auth_header_prefix,
-            txt2img_auth_body_key,
-            txt2img_auth_query_key,
-            txt2img_create_endpoint,
-            txt2img_create_method,
-            txt2img_create_payload,
-            txt2img_job_id_path,
-            txt2img_status_endpoint,
-            txt2img_status_method,
-            txt2img_state_path,
-            txt2img_success_state,
-            txt2img_failed_state,
-            txt2img_result_path,
-
-            -- IMAGE TO IMAGE
-            img2img_enabled,
-            img2img_base_url,
-            img2img_api_key,
-            img2img_auth_type,
-            img2img_auth_header_key,
-            img2img_auth_header_prefix,
-            img2img_auth_body_key,
-            img2img_auth_query_key,
-            img2img_create_endpoint,
-            img2img_create_method,
-            img2img_create_payload,
-            img2img_job_id_path,
-            img2img_status_endpoint,
-            img2img_status_method,
-            img2img_state_path,
-            img2img_success_state,
-            img2img_failed_state,
-            img2img_result_path,
-
-            -- REEL MAKER
-            reel_enabled,
-            reel_base_url,
-            reel_api_key,
-            reel_auth_type,
-            reel_auth_header_key,
-            reel_auth_header_prefix,
-            reel_auth_body_key,
-            reel_auth_query_key,
-            reel_create_endpoint,
-            reel_create_method,
-            reel_create_payload,
-            reel_job_id_path,
-            reel_status_endpoint,
-            reel_status_method,
-            reel_state_path,
-            reel_success_state,
-            reel_failed_state,
-            reel_result_path,
-
-            -- PRODUCT SHOWCASE
-            showcase_enabled,
-            showcase_base_url,
-            showcase_api_key,
-            showcase_auth_type,
-            showcase_auth_header_key,
-            showcase_auth_header_prefix,
-            showcase_auth_body_key,
-            showcase_auth_query_key,
-            showcase_create_endpoint,
-            showcase_create_method,
-            showcase_create_payload,
-            showcase_job_id_path,
-            showcase_status_endpoint,
-            showcase_status_method,
-            showcase_state_path,
-            showcase_success_state,
-            showcase_failed_state,
-            showcase_result_path
-
-          ) VALUES (
-            'Kie.ai',
-            'kie_ai',
-            1,
-            1,
-
-            -- TEXT TO IMAGE
-            1,
-            'https://api.kie.ai',
-            '',
-            'bearer',
-            'Authorization',
-            'Bearer',
-            NULL,
-            NULL,
-            '/api/v1/jobs/createTask',
-            'POST',
-            '{"model":"flux-2/pro-text-to-image","input":{"prompt":"{{prompt}}","aspect_ratio":"9:16","resolution":"1K"}}',
-            'data.taskId',
-            '/api/v1/jobs/recordInfo?taskId={{taskId}}',
-            'GET',
-            'data.state',
-            'success',
-            'fail',
-            'data.resultJson.resultUrls[0]',
-
-            -- IMAGE TO IMAGE
-            1,
-            'https://api.kie.ai',
-            '',
-            'bearer',
-            'Authorization',
-            'Bearer',
-            NULL,
-            NULL,
-            '/api/v1/jobs/createTask',
-            'POST',
-            '{"model":"flux-2/pro-image-to-image","input":{"input_urls":["{{reference_url}}"],"prompt":"{{prompt}}","aspect_ratio":"9:16","resolution":"1K"}}',
-            'data.taskId',
-            '/api/v1/jobs/recordInfo?taskId={{taskId}}',
-            'GET',
-            'data.state',
-            'success',
-            'fail',
-            'data.resultJson.resultUrls[0]',
-
-            -- REEL MAKER
-            1,
-            'https://api.kie.ai',
-            '',
-            'bearer',
-            'Authorization',
-            'Bearer',
-            NULL,
-            NULL,
-            '/api/v1/jobs/createTask',
-            'POST',
-            '{"model":"kling-2.6/motion-control","input":{"prompt":"{{prompt}}","input_urls":["{{character_image_url}}"],"video_urls":["{{reference_video_url}}"],"character_orientation":"video","mode":"720p"}}',
-            'data.taskId',
-            '/api/v1/jobs/recordInfo?taskId={{taskId}}',
-            'GET',
-            'data.state',
-            'success',
-            'fail',
-            'data.resultJson.resultUrls[0]',
-
-            -- PRODUCT SHOWCASE
-            1,
-            'https://api.kie.ai',
-            '',
-            'bearer',
-            'Authorization',
-            'Bearer',
-            NULL,
-            NULL,
-            '/api/v1/jobs/createTask',
-            'POST',
-            '{"model":"kling-3.0/video","input":{"mode":"std","image_urls":["{{image_url_1}}","{{image_url_2}}"],"prompt":"{{text}}","duration":"5","sound":false,"multi_shots":false,"kling_elements":[],"multi_prompt":[]}}',
-            'data.taskId',
-            '/api/v1/jobs/recordInfo?taskId={{taskId}}',
-            'GET',
-            'data.state',
-            'success',
-            'fail',
-            'data.resultJson.resultUrls[0]'
-          );`,
-    check: "SELECT * FROM ai_providers WHERE provider_key='kie_ai' OR name='Kie.ai' LIMIT 1;",
+    run: `DELETE FROM ai_providers
+      WHERE provider_key IN ('kie_ai','usevelix','wavespeed','fal_ai')
+         OR name IN ('Kie.ai','Usevelix','WaveSpeed.ai','Fal.ai');`,
+    check: "SELECT id FROM ai_providers WHERE provider_key IN ('kie_ai','usevelix','wavespeed','fal_ai') OR name IN ('Kie.ai','Usevelix','WaveSpeed.ai','Fal.ai') LIMIT 1;",
+    runWhenExists: true,
   },
   {
     run: "ALTER TABLE `influencers` ADD COLUMN `job_id` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL;",
@@ -922,90 +754,6 @@ const queries = [
     check: `SHOW TABLES LIKE 'scheduled_posts';`,
   },
   {
-    run: `INSERT INTO ai_providers (
-    name, provider_key, is_active, is_default,
-
-    txt2img_enabled, txt2img_base_url, txt2img_api_key,
-    txt2img_auth_type, txt2img_auth_header_key, txt2img_auth_header_prefix,
-    txt2img_auth_body_key, txt2img_auth_query_key,
-    txt2img_create_endpoint, txt2img_create_method, txt2img_create_payload,
-    txt2img_job_id_path,
-    txt2img_status_endpoint, txt2img_status_method,
-    txt2img_state_path, txt2img_success_state, txt2img_failed_state,
-    txt2img_result_path,
-
-    img2img_enabled, img2img_base_url, img2img_api_key,
-    img2img_auth_type, img2img_auth_header_key, img2img_auth_header_prefix,
-    img2img_auth_body_key, img2img_auth_query_key,
-    img2img_create_endpoint, img2img_create_method, img2img_create_payload,
-    img2img_job_id_path,
-    img2img_status_endpoint, img2img_status_method,
-    img2img_state_path, img2img_success_state, img2img_failed_state,
-    img2img_result_path,
-
-    reel_enabled, reel_base_url, reel_api_key,
-    reel_auth_type, reel_auth_header_key, reel_auth_header_prefix,
-    reel_auth_body_key, reel_auth_query_key,
-    reel_create_endpoint, reel_create_method, reel_create_payload,
-    reel_job_id_path,
-    reel_status_endpoint, reel_status_method,
-    reel_state_path, reel_success_state, reel_failed_state,
-    reel_result_path,
-
-    showcase_enabled, showcase_base_url, showcase_api_key,
-    showcase_auth_type, showcase_auth_header_key, showcase_auth_header_prefix,
-    showcase_auth_body_key, showcase_auth_query_key,
-    showcase_create_endpoint, showcase_create_method, showcase_create_payload,
-    showcase_job_id_path,
-    showcase_status_endpoint, showcase_status_method,
-    showcase_state_path, showcase_success_state, showcase_failed_state,
-    showcase_result_path
-  ) VALUES (
-    'Usevelix', 'usevelix', 0, 0,
-
-    1, 'https://usevelix.com', 'YOUR_VSK_KEY',
-    'bearer', 'Authorization', 'Bearer',
-    '', '',
-    '/api/v1/generate/text-to-image', 'POST',
-    '{"prompt":"{{prompt}}"}',
-    'jobId',
-    '/api/v1/jobs/{{taskId}}', 'GET',
-    'status', 'done', 'failed',
-    'resultUrl',
-
-    1, 'https://usevelix.com', 'YOUR_VSK_KEY',
-    'bearer', 'Authorization', 'Bearer',
-    '', '',
-    '/api/v1/generate/smart-edit', 'POST',
-    '{"imageUrl":"{{reference_url}}","prompt":"{{prompt}}"}',
-    'jobId',
-    '/api/v1/jobs/{{taskId}}', 'GET',
-    'status', 'done', 'failed',
-    'resultUrl',
-
-    1, 'https://usevelix.com', 'YOUR_VSK_KEY',
-    'bearer', 'Authorization', 'Bearer',
-    '', '',
-    '/api/v1/generate/image-to-video', 'POST',
-    '{"imageUrl":"{{character_image_url}}","prompt":"The character is performing the action from the reference video"}',
-    'jobId',
-    '/api/v1/jobs/{{taskId}}', 'GET',
-    'status', 'done', 'failed',
-    'resultUrl',
-
-    1, 'https://usevelix.com', 'YOUR_VSK_KEY',
-    'bearer', 'Authorization', 'Bearer',
-    '', '',
-    '/api/v1/generate/first-last-frame-video', 'POST',
-    '{"firstFrameUrl":"{{image_url_1}}","lastFrameUrl":"{{image_url_2}}","prompt":"{{text}}"}',
-    'jobId',
-    '/api/v1/jobs/{{taskId}}', 'GET',
-    'status', 'done', 'failed',
-    'resultUrl'
-  );`,
-    check: "SELECT * FROM ai_providers WHERE provider_key='usevelix';",
-  },
-  {
     run: `ALTER TABLE \`web_private\` ADD COLUMN \`talking_video_maker\` VARCHAR(255) DEFAULT '0';`,
     check: "SHOW COLUMNS FROM `web_private` LIKE 'talking_video_maker';",
   },
@@ -1174,28 +922,6 @@ const queries = [
     check: "SHOW COLUMNS FROM `ai_providers` LIKE 'talking_result_path';",
   },
   {
-    run: `UPDATE ai_providers SET
-    talking_enabled = 1,
-    talking_base_url = 'https://usevelix.com',
-    talking_api_key = 'YOUR_VSK_KEY',
-    talking_auth_type = 'bearer',
-    talking_auth_header_key = 'Authorization',
-    talking_auth_header_prefix = 'Bearer',
-    talking_create_endpoint = '/api/v1/generate/talking-video',
-    talking_create_method = 'POST',
-    talking_create_payload = '{"imageUrl":"{{imageUrl}}","text":"{{text}}","voice":"{{voice}}","lang":"{{lang}}","gender":"{{gender}}","voiceStyle":"{{voiceStyle}}","projectStyle":"{{projectStyle}}","aspectRatio":"{{aspectRatio}}","characterStyle":"{{characterStyle}}"}',
-    talking_job_id_path = 'jobId',
-    talking_status_endpoint = '/api/v1/jobs/{{taskId}}',
-    talking_status_method = 'GET',
-    talking_state_path = 'status',
-    talking_success_state = 'done',
-    talking_failed_state = 'failed',
-    talking_result_path = 'resultUrl'
-  WHERE provider_key = 'usevelix';`,
-    check:
-      "SELECT talking_enabled FROM ai_providers WHERE provider_key='usevelix' AND talking_enabled=1;",
-  },
-  {
     run: "ALTER TABLE `content` ADD COLUMN `submission_key` VARCHAR(64) DEFAULT NULL;",
     check: "SHOW COLUMNS FROM `content` LIKE 'submission_key';",
   },
@@ -1221,14 +947,6 @@ const queries = [
     run: "ALTER TABLE `talking_content` ADD UNIQUE KEY `uniq_talking_submission` (`uid`, `submission_key`);",
     check:
       "SHOW INDEX FROM `talking_content` WHERE Key_name = 'uniq_talking_submission';",
-  },
-  {
-    run: `UPDATE ai_providers
-      SET showcase_create_payload = '{"prompt":"{{text}}","imageUrls":["{{image_url_1}}","{{image_url_2}}"],"model":"veo3_fast","generationType":"{{generation_type}}","aspect_ratio":"{{aspect_ratio}}","enableTranslation":true}'
-      WHERE provider_key = 'kie_ai'
-        AND showcase_create_endpoint LIKE '%veo%'`,
-    check:
-      "SELECT id FROM ai_providers WHERE provider_key='kie_ai' AND showcase_create_payload LIKE '%aspect_ratio%' LIMIT 1;",
   },
   {
     run: "ALTER TABLE `web_private` DROP COLUMN `pay_stripe_id`;",
@@ -1310,6 +1028,628 @@ const queries = [
     check: "SHOW COLUMNS FROM `web_private` LIKE 'offline_payment_active';",
     runWhenExists: true,
   },
+  {
+    run: `INSERT INTO ai_providers (
+    name, provider_key, is_active, is_default,
+    txt2img_enabled, txt2img_base_url, txt2img_api_key,
+    txt2img_auth_type, txt2img_auth_header_key, txt2img_auth_header_prefix,
+    txt2img_create_endpoint, txt2img_create_method, txt2img_create_payload,
+    txt2img_job_id_path, txt2img_status_endpoint, txt2img_status_method,
+    txt2img_state_path, txt2img_success_state, txt2img_failed_state, txt2img_result_path,
+    reel_enabled, reel_base_url, reel_api_key,
+    reel_auth_type, reel_auth_header_key, reel_auth_header_prefix,
+    reel_create_endpoint, reel_create_method, reel_create_payload,
+    reel_job_id_path, reel_status_endpoint, reel_status_method,
+    reel_state_path, reel_success_state, reel_failed_state, reel_result_path,
+    showcase_enabled, showcase_base_url, showcase_api_key,
+    showcase_auth_type, showcase_auth_header_key, showcase_auth_header_prefix,
+    showcase_create_endpoint, showcase_create_method, showcase_create_payload,
+    showcase_job_id_path, showcase_status_endpoint, showcase_status_method,
+    showcase_state_path, showcase_success_state, showcase_failed_state, showcase_result_path
+  ) VALUES (
+    'Google Veo', 'google_veo', 1, 1,
+    1, 'https://generativelanguage.googleapis.com', 'YOUR_API_KEY',
+    'custom_header', 'x-goog-api-key', '',
+    '/v1beta/models/imagen-4.0-fast-generate-001:predict', 'POST',
+    '{"instances":[{"prompt":"{{prompt}}"}],"parameters":{"sampleCount":1,"aspectRatio":"9:16"}}',
+    'predictions[0].bytesBase64Encoded', '', 'GET', '', '', '',
+    '@b64data(predictions[0].bytesBase64Encoded)',
+    1, 'https://generativelanguage.googleapis.com', 'YOUR_API_KEY',
+    'custom_header', 'x-goog-api-key', '',
+    '/v1beta/models/veo-3.1-fast-generate-preview:predictLongRunning', 'POST',
+    '{"instances":[{"prompt":"The character is performing the action from the reference video, cinematic motion, natural movement","image":{"bytesBase64Encoded":"@url_to_b64:{{character_image_url}}","mimeType":"image/jpeg"}}],"parameters":{"aspectRatio":"9:16","durationSeconds":8,"personGeneration":"allow_adult"}}',
+    'name', '/v1beta/{{taskId}}', 'GET', 'done', 'true', 'error',
+    'response.generateVideoResponse.generatedSamples[0].video.uri',
+    1, 'https://generativelanguage.googleapis.com', 'YOUR_API_KEY',
+    'custom_header', 'x-goog-api-key', '',
+    '/v1beta/models/veo-3.1-fast-generate-preview:predictLongRunning', 'POST',
+    '{"instances":[{"prompt":"{{text}}","image":{"bytesBase64Encoded":"@url_to_b64:{{image_url_1}}","mimeType":"image/jpeg"},"lastFrame":{"bytesBase64Encoded":"@url_to_b64:{{image_url_2}}","mimeType":"image/jpeg"}}],"parameters":{"aspectRatio":"{{aspect_ratio}}","durationSeconds":8,"personGeneration":"allow_adult"}}',
+    'name', '/v1beta/{{taskId}}', 'GET', 'done', 'true', 'error',
+    'response.generateVideoResponse.generatedSamples[0].video.uri'
+  );`,
+    // Skip if already merged into provider_key=google
+    check: "SELECT * FROM ai_providers WHERE provider_key IN ('google_veo','google') LIMIT 1;",
+  },
+  {
+    run: `INSERT INTO ai_providers (
+    name, provider_key, is_active, is_default,
+    txt2img_enabled, txt2img_base_url, txt2img_api_key,
+    txt2img_auth_type, txt2img_auth_header_key, txt2img_auth_header_prefix,
+    txt2img_create_endpoint, txt2img_create_method, txt2img_create_payload,
+    txt2img_job_id_path, txt2img_status_endpoint, txt2img_status_method,
+    txt2img_state_path, txt2img_success_state, txt2img_failed_state, txt2img_result_path,
+    img2img_enabled, img2img_base_url, img2img_api_key,
+    img2img_auth_type, img2img_auth_header_key, img2img_auth_header_prefix,
+    img2img_create_endpoint, img2img_create_method, img2img_create_payload,
+    img2img_job_id_path, img2img_status_endpoint, img2img_status_method,
+    img2img_state_path, img2img_success_state, img2img_failed_state, img2img_result_path,
+    reel_enabled, reel_base_url, reel_api_key,
+    reel_auth_type, reel_auth_header_key, reel_auth_header_prefix,
+    reel_create_endpoint, reel_create_method, reel_create_payload,
+    reel_job_id_path, reel_status_endpoint, reel_status_method,
+    reel_state_path, reel_success_state, reel_failed_state, reel_result_path,
+    showcase_enabled, showcase_base_url, showcase_api_key,
+    showcase_auth_type, showcase_auth_header_key, showcase_auth_header_prefix,
+    showcase_create_endpoint, showcase_create_method, showcase_create_payload,
+    showcase_job_id_path, showcase_status_endpoint, showcase_status_method,
+    showcase_state_path, showcase_success_state, showcase_failed_state, showcase_result_path
+  ) VALUES (
+    'Alibaba Wan (DashScope)', 'alibaba_wan', 0, 0,
+    1, 'https://dashscope-intl.aliyuncs.com', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/api/v1/services/aigc/text2image/image-synthesis', 'POST',
+    '{"__headers":{"X-DashScope-Async":"enable"},"model":"wan2.2-t2i-flash","input":{"prompt":"{{prompt}}"},"parameters":{"size":"768*1344","n":1}}',
+    'output.task_id', '/api/v1/tasks/{{taskId}}', 'GET', 'output.task_status', 'SUCCEEDED', 'FAILED', 'output.results[0].url',
+    1, 'https://dashscope-intl.aliyuncs.com', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/api/v1/services/aigc/image2image/image-synthesis', 'POST',
+    '{"__headers":{"X-DashScope-Async":"enable"},"model":"wanx-style-repaint-v1","input":{"prompt":"{{prompt}}","images":[{"image_url":"{{reference_url}}"}]},"parameters":{"n":1}}',
+    'output.task_id', '/api/v1/tasks/{{taskId}}', 'GET', 'output.task_status', 'SUCCEEDED', 'FAILED', 'output.results[0].url',
+    1, 'https://dashscope-intl.aliyuncs.com', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/api/v1/services/aigc/video-generation/video-synthesis', 'POST',
+    '{"__headers":{"X-DashScope-Async":"enable"},"model":"wan2.2-i2v-flash","input":{"prompt":"The character is performing the action from the reference video, natural motion","img_url":"{{character_image_url}}"},"parameters":{"resolution":"720P","prompt_extend":true}}',
+    'output.task_id', '/api/v1/tasks/{{taskId}}', 'GET', 'output.task_status', 'SUCCEEDED', 'FAILED', 'output.video_url',
+    1, 'https://dashscope-intl.aliyuncs.com', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/api/v1/services/aigc/image2video/video-synthesis', 'POST',
+    '{"__headers":{"X-DashScope-Async":"enable"},"model":"wan2.2-kf2v-flash","input":{"prompt":"{{text}}","first_frame_url":"{{image_url_1}}","last_frame_url":"{{image_url_2}}"},"parameters":{"resolution":"720P","prompt_extend":true}}',
+    'output.task_id', '/api/v1/tasks/{{taskId}}', 'GET', 'output.task_status', 'SUCCEEDED', 'FAILED', 'output.video_url'
+  );`,
+    check: "SELECT * FROM ai_providers WHERE provider_key='alibaba_wan' LIMIT 1;",
+  },
+  {
+    run: `INSERT INTO ai_providers (
+    name, provider_key, is_active, is_default,
+    txt2img_enabled, txt2img_base_url, txt2img_api_key,
+    txt2img_auth_type, txt2img_auth_header_key, txt2img_auth_header_prefix,
+    txt2img_create_endpoint, txt2img_create_method, txt2img_create_payload,
+    txt2img_job_id_path, txt2img_status_endpoint, txt2img_status_method,
+    txt2img_state_path, txt2img_success_state, txt2img_failed_state, txt2img_result_path,
+    img2img_enabled, img2img_base_url, img2img_api_key,
+    img2img_auth_type, img2img_auth_header_key, img2img_auth_header_prefix,
+    img2img_create_endpoint, img2img_create_method, img2img_create_payload,
+    img2img_job_id_path, img2img_status_endpoint, img2img_status_method,
+    img2img_state_path, img2img_success_state, img2img_failed_state, img2img_result_path,
+    reel_enabled, reel_base_url, reel_api_key,
+    reel_auth_type, reel_auth_header_key, reel_auth_header_prefix,
+    reel_create_endpoint, reel_create_method, reel_create_payload,
+    reel_job_id_path, reel_status_endpoint, reel_status_method,
+    reel_state_path, reel_success_state, reel_failed_state, reel_result_path,
+    showcase_enabled, showcase_base_url, showcase_api_key,
+    showcase_auth_type, showcase_auth_header_key, showcase_auth_header_prefix,
+    showcase_create_endpoint, showcase_create_method, showcase_create_payload,
+    showcase_job_id_path, showcase_status_endpoint, showcase_status_method,
+    showcase_state_path, showcase_success_state, showcase_failed_state, showcase_result_path
+  ) VALUES (
+    'xAI Grok Imagine', 'xai_grok', 0, 0,
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/images/generations', 'POST',
+    '{"model":"grok-imagine-image","prompt":"{{prompt}}","aspect_ratio":"9:16","n":1}',
+    'data[0].url', '', 'GET', '', '', '', 'data[0].url',
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/images/edits', 'POST',
+    '{"model":"grok-imagine-image","prompt":"{{prompt}}","image":{"url":"{{reference_url}}","type":"image_url"},"n":1}',
+    'data[0].url', '', 'GET', '', '', '', 'data[0].url',
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/videos/generations', 'POST',
+    '{"model":"grok-imagine-video","prompt":"The character is performing the action from the reference video, natural cinematic motion","image":{"url":"{{character_image_url}}"},"duration":8,"aspect_ratio":"9:16","resolution":"720p"}',
+    'request_id', '/v1/videos/{{taskId}}', 'GET', 'status', 'done', 'failed', 'video.url',
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/videos/generations', 'POST',
+    '{"model":"grok-imagine-video","prompt":"{{text}}","image":{"url":"{{image_url_1}}"},"duration":8,"aspect_ratio":"9:16","resolution":"720p"}',
+    'request_id', '/v1/videos/{{taskId}}', 'GET', 'status', 'done', 'failed', 'video.url'
+  );`,
+    check: "SELECT * FROM ai_providers WHERE provider_key='xai_grok' LIMIT 1;",
+  },
+
+  {
+    run: `INSERT INTO ai_providers (
+    name, provider_key, is_active, is_default,
+    txt2img_enabled, txt2img_base_url, txt2img_api_key,
+    txt2img_auth_type, txt2img_auth_header_key, txt2img_auth_header_prefix,
+    txt2img_create_endpoint, txt2img_create_method, txt2img_create_payload,
+    txt2img_job_id_path, txt2img_status_endpoint, txt2img_status_method,
+    txt2img_state_path, txt2img_success_state, txt2img_failed_state, txt2img_result_path,
+    img2img_enabled, reel_enabled, showcase_enabled
+  ) VALUES (
+    'ChatGPT (OpenAI)', 'openai_chatgpt', 0, 0,
+    1, 'https://api.openai.com/v1', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/chat/completions', 'POST',
+    '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"{{prompt}}"}]}',
+    'choices[0].message.content', '', 'GET', '', '', '', 'choices[0].message.content',
+    0, 0, 0
+  );`,
+    check: "SELECT * FROM ai_providers WHERE provider_key='openai_chatgpt' LIMIT 1;",
+  },
+
+  {
+    run: `INSERT INTO ai_providers (
+    name, provider_key, is_active, is_default,
+    txt2img_enabled, txt2img_base_url, txt2img_api_key,
+    txt2img_auth_type, txt2img_auth_header_key, txt2img_auth_header_prefix,
+    txt2img_create_endpoint, txt2img_create_method, txt2img_create_payload,
+    txt2img_job_id_path, txt2img_status_endpoint, txt2img_status_method,
+    txt2img_state_path, txt2img_success_state, txt2img_failed_state, txt2img_result_path,
+    img2img_enabled, reel_enabled, showcase_enabled
+  ) VALUES (
+    'Groq (Free Text)', 'groq_free', 0, 0,
+    1, 'https://api.groq.com/openai/v1', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/chat/completions', 'POST',
+    '{"model":"llama-3.1-8b-instant","messages":[{"role":"user","content":"{{prompt}}"}]}',
+    'choices[0].message.content', '', 'GET', '', '', '', 'choices[0].message.content',
+    0, 0, 0
+  );`,
+    check: "SELECT * FROM ai_providers WHERE provider_key='groq_free' LIMIT 1;",
+  },
+
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `text_content_maker` VARCHAR(255) DEFAULT '3';",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'text_content_maker';",
+  },
+
+  {
+    run: `CREATE TABLE text_content (
+      id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+      uid VARCHAR(255) NOT NULL,
+      content_type VARCHAR(50) NOT NULL DEFAULT 'caption',
+      topic TEXT NOT NULL,
+      tone VARCHAR(100) DEFAULT 'engaging',
+      language VARCHAR(50) DEFAULT 'English',
+      extra TEXT NULL,
+      result LONGTEXT NULL,
+      credits INT DEFAULT 0,
+      status VARCHAR(50) DEFAULT 'success',
+      error_msg TEXT NULL,
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX (uid),
+      INDEX (content_type)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+    check: "SHOW TABLES LIKE 'text_content';",
+  },
+
+  // ── Text-to-Text (txt2txt) columns on ai_providers ──
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_enabled TINYINT(1) DEFAULT 0;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_enabled';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_base_url TEXT DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_base_url';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_api_key TEXT DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_api_key';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_auth_type VARCHAR(50) DEFAULT 'bearer';`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_auth_type';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_auth_header_key VARCHAR(255) DEFAULT 'Authorization';`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_auth_header_key';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_auth_header_prefix VARCHAR(100) DEFAULT 'Bearer';`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_auth_header_prefix';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_auth_body_key TEXT DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_auth_body_key';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_auth_query_key TEXT DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_auth_query_key';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_create_endpoint TEXT DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_create_endpoint';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_create_method VARCHAR(10) DEFAULT 'POST';`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_create_method';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_create_payload JSON DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_create_payload';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_job_id_path VARCHAR(255) DEFAULT 'choices[0].message.content';`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_job_id_path';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_status_endpoint TEXT DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_status_endpoint';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_status_method VARCHAR(10) DEFAULT 'GET';`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_status_method';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_state_path VARCHAR(255) DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_state_path';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_success_state VARCHAR(100) DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_success_state';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_failed_state VARCHAR(100) DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_failed_state';",
+  },
+  {
+    run: `ALTER TABLE ai_providers ADD COLUMN txt2txt_result_path TEXT DEFAULT NULL;`,
+    check: "SHOW COLUMNS FROM `ai_providers` LIKE 'txt2txt_result_path';",
+  },
+
+  // Keep Google + Grok + D-ID (+ legacy rows until mergeGoogleProviders runs at end of init)
+  {
+    run: `DELETE FROM ai_providers
+      WHERE provider_key NOT IN ('google', 'xai_grok', 'google_veo', 'google_gemini', 'd_id');`,
+    check: "SELECT id FROM ai_providers WHERE provider_key NOT IN ('google','xai_grok','google_veo','google_gemini','d_id') LIMIT 1;",
+    runWhenExists: true,
+  },
+
+  {
+    run: `UPDATE ai_providers SET name = 'Google Veo'
+      WHERE provider_key = 'google_veo' AND name <> 'Google Veo';`,
+    check: "SELECT id FROM ai_providers WHERE provider_key='google_veo' AND name <> 'Google Veo' LIMIT 1;",
+    runWhenExists: true,
+  },
+  {
+    run: `INSERT INTO ai_providers (
+    name, provider_key, is_active, is_default,
+    txt2img_enabled, img2img_enabled, reel_enabled, showcase_enabled,
+    txt2txt_enabled, txt2txt_base_url, txt2txt_api_key,
+    txt2txt_auth_type, txt2txt_auth_header_key, txt2txt_auth_header_prefix,
+    txt2txt_create_endpoint, txt2txt_create_method, txt2txt_create_payload,
+    txt2txt_result_path
+  ) VALUES (
+    'Google Gemini', 'google_gemini', 1, 0,
+    0, 0, 0, 0,
+    1, 'https://generativelanguage.googleapis.com', 'YOUR_API_KEY',
+    'custom_header', 'x-goog-api-key', '',
+    '/v1beta/models/gemini-2.0-flash:generateContent', 'POST',
+    '{"model":"gemini-2.0-flash"}',
+    'candidates[0].content.parts[0].text'
+  );`,
+    // Skip if already merged into provider_key=google
+    check: "SELECT * FROM ai_providers WHERE provider_key IN ('google_gemini','google') LIMIT 1;",
+  },
+
+  {
+    run: `UPDATE ai_providers SET txt2txt_enabled = 0
+    WHERE provider_key = 'google_veo' AND txt2txt_enabled = 1;`,
+    check: "SELECT id FROM ai_providers WHERE provider_key='google_veo' AND txt2txt_enabled=1 LIMIT 1;",
+    runWhenExists: true,
+  },
+
+  {
+    run: `UPDATE ai_providers SET
+      talking_enabled = 1,
+      talking_base_url = 'https://generativelanguage.googleapis.com',
+      talking_api_key = COALESCE(NULLIF(talking_api_key,''), NULLIF(txt2img_api_key,''), NULLIF(reel_api_key,''), NULLIF(showcase_api_key,''), 'YOUR_API_KEY'),
+      talking_auth_type = 'custom_header',
+      talking_auth_header_key = 'x-goog-api-key',
+      talking_auth_header_prefix = '',
+      talking_create_endpoint = '/v1beta/models/veo-3.1-fast-generate-preview:predictLongRunning',
+      talking_create_method = 'POST',
+      talking_create_payload = CAST('{"instances":[{"prompt":"The person in the image talks directly to the camera and says: \\"{{text}}\\". Natural lip movement, clear speech, realistic talking-head, cinematic lighting, {{aspectRatio}} vertical framing.","image":{"bytesBase64Encoded":"@url_to_b64:{{imageUrl}}","mimeType":"image/jpeg"}}],"parameters":{"aspectRatio":"{{aspectRatio}}","durationSeconds":8,"personGeneration":"allow_adult"}}' AS JSON),
+      talking_job_id_path = 'name',
+      talking_status_endpoint = '/v1beta/{{taskId}}',
+      talking_status_method = 'GET',
+      talking_state_path = 'done',
+      talking_success_state = 'true',
+      talking_failed_state = 'error',
+      talking_result_path = 'response.generateVideoResponse.generatedSamples[0].video.uri'
+    WHERE provider_key = 'google_veo';`,
+    check: "SELECT id FROM ai_providers WHERE provider_key='google_veo' AND (talking_enabled=0 OR talking_create_endpoint IS NULL OR talking_create_endpoint NOT LIKE '%veo%' OR talking_create_payload IS NULL OR talking_job_id_path='jobId') LIMIT 1;",
+    runWhenExists: true,
+  },
+
+  {
+    run: `UPDATE ai_providers SET
+      txt2txt_enabled = 1,
+      txt2txt_base_url = 'https://generativelanguage.googleapis.com',
+      txt2txt_api_key = COALESCE(NULLIF(txt2txt_api_key,''), NULLIF(txt2img_api_key,''), 'YOUR_API_KEY'),
+      txt2txt_auth_type = 'custom_header',
+      txt2txt_auth_header_key = 'x-goog-api-key',
+      txt2txt_auth_header_prefix = '',
+      txt2txt_create_endpoint = '/v1beta/models/gemini-2.0-flash:generateContent',
+      txt2txt_create_method = 'POST',
+      txt2txt_create_payload = '{"model":"gemini-2.0-flash"}',
+      txt2txt_result_path = 'candidates[0].content.parts[0].text',
+      txt2img_enabled = 1,
+      txt2img_base_url = 'https://generativelanguage.googleapis.com',
+      txt2img_api_key = COALESCE(NULLIF(txt2img_api_key,''), NULLIF(txt2txt_api_key,''), 'YOUR_API_KEY'),
+      txt2img_auth_type = 'custom_header',
+      txt2img_auth_header_key = 'x-goog-api-key',
+      txt2img_auth_header_prefix = '',
+      txt2img_create_endpoint = '/v1beta/models/imagen-4.0-fast-generate-001:predict',
+      txt2img_create_method = 'POST',
+      txt2img_create_payload = '{"instances":[{"prompt":"{{prompt}}"}],"parameters":{"sampleCount":1,"aspectRatio":"9:16"}}',
+      txt2img_job_id_path = 'predictions[0].bytesBase64Encoded',
+      txt2img_status_endpoint = '',
+      txt2img_result_path = '@b64data(predictions[0].bytesBase64Encoded)',
+      img2img_enabled = 1,
+      img2img_base_url = 'https://generativelanguage.googleapis.com',
+      img2img_api_key = COALESCE(NULLIF(img2img_api_key,''), NULLIF(txt2img_api_key,''), NULLIF(txt2txt_api_key,''), 'YOUR_API_KEY'),
+      img2img_auth_type = 'custom_header',
+      img2img_auth_header_key = 'x-goog-api-key',
+      img2img_auth_header_prefix = '',
+      img2img_create_endpoint = '/v1beta/models/imagen-3.0-capability-001:predict',
+      img2img_create_method = 'POST',
+      img2img_create_payload = '{"instances":[{"prompt":"{{prompt}}","referenceImages":[{"referenceType":"REFERENCE_TYPE_SUBJECT","referenceId":1,"referenceImage":{"bytesBase64Encoded":"@url_to_b64:{{reference_url}}"}}]}],"parameters":{"sampleCount":1,"aspectRatio":"9:16"}}',
+      img2img_job_id_path = 'predictions[0].bytesBase64Encoded',
+      img2img_status_endpoint = '',
+      img2img_result_path = '@b64data(predictions[0].bytesBase64Encoded)',
+      reel_enabled = 0,
+      showcase_enabled = 0,
+      talking_enabled = 0,
+      is_active = 1
+    WHERE provider_key = 'google_gemini';`,
+    check: "SELECT id FROM ai_providers WHERE provider_key='google_gemini' AND txt2img_enabled=1 AND img2img_enabled=1 AND txt2txt_enabled=1 LIMIT 1;",
+  },
+
+  {
+    run: `UPDATE ai_providers SET
+      txt2img_enabled = 0,
+      img2img_enabled = 0,
+      txt2txt_enabled = 0,
+      reel_enabled = 1,
+      showcase_enabled = 1,
+      talking_enabled = 1,
+      reel_base_url = COALESCE(NULLIF(reel_base_url,''), 'https://generativelanguage.googleapis.com'),
+      showcase_base_url = COALESCE(NULLIF(showcase_base_url,''), 'https://generativelanguage.googleapis.com'),
+      talking_base_url = COALESCE(NULLIF(talking_base_url,''), 'https://generativelanguage.googleapis.com'),
+      talking_api_key = COALESCE(NULLIF(talking_api_key,''), NULLIF(reel_api_key,''), NULLIF(showcase_api_key,''), NULLIF(txt2img_api_key,''), 'YOUR_API_KEY'),
+      talking_auth_type = 'custom_header',
+      talking_auth_header_key = 'x-goog-api-key',
+      talking_auth_header_prefix = '',
+      talking_create_endpoint = '/v1beta/models/veo-3.1-fast-generate-preview:predictLongRunning',
+      talking_create_method = 'POST',
+      talking_create_payload = CAST('{"instances":[{"prompt":"The person in the image talks directly to the camera and says: \\"{{text}}\\". Natural lip movement, clear speech, realistic talking-head, cinematic lighting, {{aspectRatio}} vertical framing.","image":{"bytesBase64Encoded":"@url_to_b64:{{imageUrl}}","mimeType":"image/jpeg"}}],"parameters":{"aspectRatio":"{{aspectRatio}}","durationSeconds":8,"personGeneration":"allow_adult"}}' AS JSON),
+      talking_job_id_path = 'name',
+      talking_status_endpoint = '/v1beta/{{taskId}}',
+      talking_status_method = 'GET',
+      talking_state_path = 'done',
+      talking_success_state = 'true',
+      talking_failed_state = 'error',
+      talking_result_path = 'response.generateVideoResponse.generatedSamples[0].video.uri',
+      is_active = 1,
+      is_default = 1
+    WHERE provider_key = 'google_veo';`,
+    check: "SELECT id FROM ai_providers WHERE provider_key='google_veo' AND reel_enabled=1 AND showcase_enabled=1 AND talking_enabled=1 AND txt2img_enabled=0 AND talking_create_endpoint LIKE '%veo%' LIMIT 1;",
+  },
+
+  // Ensure xAI Grok exists with full feature set (inactive by default — alternate to Google)
+  {
+    run: `INSERT INTO ai_providers (
+    name, provider_key, is_active, is_default,
+    txt2img_enabled, txt2img_base_url, txt2img_api_key,
+    txt2img_auth_type, txt2img_auth_header_key, txt2img_auth_header_prefix,
+    txt2img_create_endpoint, txt2img_create_method, txt2img_create_payload,
+    txt2img_job_id_path, txt2img_status_endpoint, txt2img_status_method,
+    txt2img_state_path, txt2img_success_state, txt2img_failed_state, txt2img_result_path,
+    img2img_enabled, img2img_base_url, img2img_api_key,
+    img2img_auth_type, img2img_auth_header_key, img2img_auth_header_prefix,
+    img2img_create_endpoint, img2img_create_method, img2img_create_payload,
+    img2img_job_id_path, img2img_status_endpoint, img2img_status_method,
+    img2img_state_path, img2img_success_state, img2img_failed_state, img2img_result_path,
+    reel_enabled, reel_base_url, reel_api_key,
+    reel_auth_type, reel_auth_header_key, reel_auth_header_prefix,
+    reel_create_endpoint, reel_create_method, reel_create_payload,
+    reel_job_id_path, reel_status_endpoint, reel_status_method,
+    reel_state_path, reel_success_state, reel_failed_state, reel_result_path,
+    showcase_enabled, showcase_base_url, showcase_api_key,
+    showcase_auth_type, showcase_auth_header_key, showcase_auth_header_prefix,
+    showcase_create_endpoint, showcase_create_method, showcase_create_payload,
+    showcase_job_id_path, showcase_status_endpoint, showcase_status_method,
+    showcase_state_path, showcase_success_state, showcase_failed_state, showcase_result_path,
+    talking_enabled, talking_base_url, talking_api_key,
+    talking_auth_type, talking_auth_header_key, talking_auth_header_prefix,
+    talking_create_endpoint, talking_create_method, talking_create_payload,
+    talking_job_id_path, talking_status_endpoint, talking_status_method,
+    talking_state_path, talking_success_state, talking_failed_state, talking_result_path,
+    txt2txt_enabled, txt2txt_base_url, txt2txt_api_key,
+    txt2txt_auth_type, txt2txt_auth_header_key, txt2txt_auth_header_prefix,
+    txt2txt_create_endpoint, txt2txt_create_method, txt2txt_create_payload,
+    txt2txt_result_path
+  ) VALUES (
+    'xAI Grok Imagine', 'xai_grok', 0, 0,
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/images/generations', 'POST',
+    '{"model":"grok-imagine-image","prompt":"{{prompt}}","aspect_ratio":"9:16","n":1}',
+    'data[0].url', '', 'GET', '', '', '', 'data[0].url',
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/images/edits', 'POST',
+    '{"model":"grok-imagine-image","prompt":"{{prompt}}","image":{"url":"{{reference_url}}","type":"image_url"},"n":1}',
+    'data[0].url', '', 'GET', '', '', '', 'data[0].url',
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/videos/generations', 'POST',
+    '{"model":"grok-imagine-video","prompt":"The character is performing the action from the reference video, natural cinematic motion","image":{"url":"{{character_image_url}}"},"duration":8,"aspect_ratio":"9:16","resolution":"720p"}',
+    'request_id', '/v1/videos/{{taskId}}', 'GET', 'status', 'done', 'failed', 'video.url',
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/videos/generations', 'POST',
+    '{"model":"grok-imagine-video","prompt":"{{text}}","image":{"url":"{{image_url_1}}"},"duration":8,"aspect_ratio":"{{aspect_ratio}}","resolution":"720p"}',
+    'request_id', '/v1/videos/{{taskId}}', 'GET', 'status', 'done', 'failed', 'video.url',
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/videos/generations', 'POST',
+    '{"model":"grok-imagine-video","prompt":"The person in the image talks directly to the camera and says: {{text}}. Natural lip movement, clear speech, realistic talking-head.","image":{"url":"{{imageUrl}}"},"duration":8,"aspect_ratio":"{{aspectRatio}}","resolution":"720p"}',
+    'request_id', '/v1/videos/{{taskId}}', 'GET', 'status', 'done', 'failed', 'video.url',
+    1, 'https://api.x.ai', 'YOUR_API_KEY',
+    'bearer', 'Authorization', 'Bearer',
+    '/v1/chat/completions', 'POST',
+    '{"model":"grok-3-mini","messages":[{"role":"user","content":"{{prompt}}"}]}',
+    'choices[0].message.content'
+  );`,
+    check: "SELECT * FROM ai_providers WHERE provider_key='xai_grok' LIMIT 1;",
+  },
+
+  {
+    run: `UPDATE ai_providers SET
+      talking_enabled = 1,
+      talking_base_url = 'https://api.x.ai',
+      talking_api_key = COALESCE(NULLIF(talking_api_key,''), NULLIF(reel_api_key,''), NULLIF(txt2img_api_key,''), 'YOUR_API_KEY'),
+      talking_auth_type = 'bearer',
+      talking_auth_header_key = 'Authorization',
+      talking_auth_header_prefix = 'Bearer',
+      talking_create_endpoint = '/v1/videos/generations',
+      talking_create_method = 'POST',
+      talking_create_payload = '{"model":"grok-imagine-video","prompt":"The person in the image talks directly to the camera and says: {{text}}. Natural lip movement, clear speech, realistic talking-head.","image":{"url":"{{imageUrl}}"},"duration":8,"aspect_ratio":"{{aspectRatio}}","resolution":"720p"}',
+      talking_job_id_path = 'request_id',
+      talking_status_endpoint = '/v1/videos/{{taskId}}',
+      talking_status_method = 'GET',
+      talking_state_path = 'status',
+      talking_success_state = 'done',
+      talking_failed_state = 'failed',
+      talking_result_path = 'video.url',
+      txt2txt_enabled = 1,
+      txt2txt_base_url = COALESCE(NULLIF(txt2txt_base_url,''), 'https://api.x.ai'),
+      txt2txt_api_key = COALESCE(NULLIF(txt2txt_api_key,''), NULLIF(txt2img_api_key,''), 'YOUR_API_KEY'),
+      txt2txt_auth_type = 'bearer',
+      txt2txt_auth_header_key = 'Authorization',
+      txt2txt_auth_header_prefix = 'Bearer',
+      txt2txt_create_endpoint = '/v1/chat/completions',
+      txt2txt_create_method = 'POST',
+      txt2txt_create_payload = '{"model":"grok-3-mini","messages":[{"role":"user","content":"{{prompt}}"}]}',
+      txt2txt_result_path = 'choices[0].message.content'
+    WHERE provider_key = 'xai_grok';`,
+    check: "SELECT id FROM ai_providers WHERE provider_key='xai_grok' AND (talking_enabled=0 OR txt2txt_enabled=0 OR talking_create_endpoint IS NULL OR talking_create_endpoint='' OR talking_job_id_path='jobId') LIMIT 1;",
+    runWhenExists: true,
+  },
+
+  // D-ID — fast lip-sync talking (motion from photo + TTS), not full video generation
+  {
+    run: `INSERT INTO ai_providers (
+    name, provider_key, is_active, is_default,
+    txt2img_enabled, img2img_enabled, reel_enabled, showcase_enabled, talking_enabled,
+    talking_base_url, talking_api_key,
+    talking_auth_type, talking_auth_header_key, talking_auth_header_prefix,
+    talking_create_endpoint, talking_create_method, talking_create_payload,
+    talking_job_id_path, talking_status_endpoint, talking_status_method,
+    talking_state_path, talking_success_state, talking_failed_state, talking_result_path
+  ) VALUES (
+    'D-ID Lip Sync', 'd_id', 0, 0,
+    0, 0, 0, 0, 1,
+    'https://api.d-id.com', 'YOUR_API_KEY',
+    'basic', 'Authorization', '',
+    '/talks', 'POST',
+    '{"source_url":"{{imageUrl}}","script":{"type":"text","input":"{{text}}","provider":{"type":"microsoft","voice_id":"{{voice}}"}},"config":{"stitch":true}}',
+    'id', '/talks/{{taskId}}', 'GET',
+    'status', 'done', 'error,rejected', 'result_url'
+  );`,
+    check: "SELECT * FROM ai_providers WHERE provider_key='d_id' LIMIT 1;",
+  },
+
+  {
+    run: "ALTER TABLE `web_private` ADD COLUMN `book_writer_maker` VARCHAR(255) DEFAULT '2';",
+    check: "SHOW COLUMNS FROM `web_private` LIKE 'book_writer_maker';",
+  },
+
+  {
+    run: `CREATE TABLE books (
+      id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+      uid VARCHAR(255) NOT NULL,
+      title VARCHAR(500) NOT NULL,
+      author_name VARCHAR(255) DEFAULT 'Anonymous',
+      genre VARCHAR(100) DEFAULT 'Fiction',
+      language VARCHAR(50) DEFAULT 'English',
+      tone VARCHAR(100) DEFAULT 'engaging',
+      page_count INT DEFAULT 8,
+      synopsis TEXT NULL,
+      pages LONGTEXT NULL,
+      credits INT DEFAULT 0,
+      status VARCHAR(50) DEFAULT 'processing',
+      provider VARCHAR(255) NULL,
+      error_msg TEXT NULL,
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX (uid),
+      INDEX (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+    check: "SHOW TABLES LIKE 'books';",
+  },
+
+  {
+    run: "ALTER TABLE `books` ADD COLUMN `cover_image` VARCHAR(500) DEFAULT NULL;",
+    check: "SHOW COLUMNS FROM `books` LIKE 'cover_image';",
+  },
+
+  // Text chat with influencers (replaces talking-video UX)
+  {
+    run: `CREATE TABLE influencer_chat_messages (
+      id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+      uid VARCHAR(255) NOT NULL,
+      influencer_id INT NOT NULL,
+      role VARCHAR(20) NOT NULL,
+      message TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_chat_uid_inf (uid, influencer_id, id)
+    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+    check: "SHOW TABLES LIKE 'influencer_chat_messages';",
+  },
+
+  // Google Imagen is paid-only — keep images on xAI Grok
+  {
+    run: `UPDATE ai_providers SET txt2img_enabled = 0, img2img_enabled = 0
+      WHERE provider_key = 'google' AND (txt2img_enabled = 1 OR img2img_enabled = 1)`,
+    check: `SELECT id FROM ai_providers WHERE provider_key = 'google' AND (txt2img_enabled = 1 OR img2img_enabled = 1) LIMIT 1`,
+    runWhenExists: true,
+  },
+  {
+    run: `UPDATE ai_providers SET is_active = 1, is_default = 1
+      WHERE provider_key = 'xai_grok'
+        AND txt2img_api_key IS NOT NULL
+        AND txt2img_api_key <> ''
+        AND txt2img_api_key <> 'YOUR_API_KEY'
+        AND is_default = 0`,
+    check: `SELECT id FROM ai_providers WHERE provider_key = 'xai_grok'
+      AND txt2img_api_key IS NOT NULL AND txt2img_api_key <> '' AND txt2img_api_key <> 'YOUR_API_KEY'
+      AND is_default = 0 LIMIT 1`,
+    runWhenExists: true,
+  },
+  {
+    run: `UPDATE ai_providers SET is_default = 0
+      WHERE provider_key = 'google' AND is_default = 1
+        AND EXISTS (
+          SELECT 1 FROM (SELECT id FROM ai_providers WHERE provider_key = 'xai_grok' AND is_default = 1) t
+        )`,
+    check: `SELECT id FROM ai_providers WHERE provider_key = 'google' AND is_default = 1
+      AND EXISTS (SELECT 1 FROM ai_providers g WHERE g.provider_key = 'xai_grok' AND g.is_default = 1) LIMIT 1`,
+    runWhenExists: true,
+  },
+
 ];
 
 const initDatabase = async () => {
@@ -1331,6 +1671,18 @@ const initDatabase = async () => {
         connection.release();
       }
     }
+
+    // Merge legacy google_veo + google_gemini into one google provider
+    try {
+      const { mergeGoogleProviders } = require("../scripts/mergeGoogleProviders");
+      const result = await mergeGoogleProviders(db);
+      if (result?.merged) {
+        console.log("Merged Google providers into single 'google' entry");
+      }
+    } catch (err) {
+      console.warn("Google provider merge skipped:", err.message);
+    }
+
     console.log("Database initialization completed");
   } catch (error) {
     console.error("Database initialization error:", error.message);

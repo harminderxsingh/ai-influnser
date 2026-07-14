@@ -4,9 +4,19 @@ const {
   logUsage,
   sendUsageUpdateEmail,
 } = require("../utils/common");
-const { fetchJobStatus, createJob } = require("./api");
+const { fetchJobStatus, createJob, fromSyncTaskId } = require("./api");
 
-const INF_STATUS_POLL_SECONDS = 30;
+// Async providers need a short poll; sync (Grok) jobs finish immediately
+const INF_STATUS_POLL_SECONDS = 5;
+
+function mediaDownloadOpts(provider) {
+  const apiKey =
+    provider?.txt2img_api_key ||
+    provider?.img2img_api_key ||
+    provider?.reel_api_key ||
+    "";
+  return { apiKey, timeout: 45000 };
+}
 
 // ============================================
 // HELPERS
@@ -184,9 +194,11 @@ async function processInfluencer(inf, provider, fee) {
     // ── success → download and save ───────────────────────────
     let savedPath;
     try {
+      console.log(`⬇️  inf #${id} downloading result…`);
       savedPath = await downloadImage(
         result.data,
         `${__dirname}/../client/public/media`,
+        mediaDownloadOpts(provider),
       );
     } catch (err) {
       console.error(
@@ -404,6 +416,64 @@ async function processInfluencer(inf, provider, fee) {
     status: "processing",
     des: `inf #${id} job submitted — taskId: ${create.taskId}`,
   });
+
+  // Grok/sync returns the final URL in taskId — download immediately (no poll wait)
+  const syncUrl = fromSyncTaskId(create.taskId);
+  if (syncUrl) {
+    let savedPath;
+    try {
+      console.log(`⬇️  inf #${id} sync result — downloading now…`);
+      savedPath = await downloadImage(
+        syncUrl,
+        `${__dirname}/../client/public/media`,
+        mediaDownloadOpts(provider),
+      );
+    } catch (err) {
+      console.error(
+        `❌ downloadImage failed for inf #${id}:`,
+        err.message,
+        "| URL:",
+        syncUrl,
+      );
+      await refundCredits(uid, fee);
+      await setInfError(id, `downloadImage failed: ${err.message}`);
+      const des = `inf #${id} download failed — ${fee}cr refunded. Error: ${err.message} | URL: ${syncUrl}`;
+      await logUsage({
+        uid,
+        task: "inf_maker",
+        credits: fee,
+        status: "refunded",
+        des,
+      });
+      await notifyUser(user, {
+        task: "Influencer Maker",
+        des,
+        status: "Refunded",
+      });
+      return;
+    }
+
+    await query(
+      `UPDATE influencers SET status = 'active', photo_url = ? WHERE id = ?`,
+      [savedPath, id],
+    );
+    console.log(`✅ inf #${id} completed — saved to ${savedPath}`);
+    const successDes = `inf #${id} completed successfully — image saved to ${savedPath}`;
+    await logUsage({
+      uid,
+      task: "inf_maker",
+      credits: fee,
+      status: "success",
+      des: successDes,
+    });
+    await notifyUser(user, {
+      task: "Influencer Maker",
+      des: successDes,
+      status: "Success",
+    });
+    return;
+  }
+
   await notifyUser(user, {
     task: "Influencer Maker",
     des: `Your influencer #${id} is being generated. We'll notify you once it's ready.`,
@@ -417,6 +487,8 @@ async function processInfluencer(inf, provider, fee) {
 
 async function runMakeInf({ provider }) {
   try {
+    if (!provider?.txt2img_enabled) return;
+
     const fee = await getCreditFee();
 
     if (fee < 1) {
@@ -436,6 +508,7 @@ async function runMakeInf({ provider }) {
          AND (
            job_id IS NULL
            OR job_id = ''
+           OR job_id LIKE 'sync:%'
            OR updated_at < DATE_SUB(NOW(), INTERVAL ${INF_STATUS_POLL_SECONDS} SECOND)
          )`,
     );

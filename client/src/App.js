@@ -115,7 +115,15 @@ const AppContent = () => {
         ? c.secondary_light || c.secondary || "#374151"
         : c.secondary_dark || c.secondary || "#E5E7EB";
 
+    const fontFamily =
+      c.font_family ||
+      '"Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
     return createTheme({
+      typography: {
+        ...typography,
+        fontFamily,
+      },
       palette: {
         mode,
         primary: {
@@ -225,6 +233,16 @@ const AppContent = () => {
               fontSize: c.button?.large?.fontSize || "0.8125rem",
             },
             contained: {
+              background:
+                mode === "light"
+                  ? c.gradient_primary_light ||
+                    c.gradient_primary ||
+                    c.button?.contained?.backgroundColor_light ||
+                    primaryColor
+                  : c.gradient_primary_dark ||
+                    c.gradient_primary ||
+                    c.button?.contained?.backgroundColor_dark ||
+                    primaryColor,
               backgroundColor:
                 mode === "light"
                   ? c.button?.contained?.backgroundColor_light || primaryColor
@@ -232,11 +250,21 @@ const AppContent = () => {
               color:
                 mode === "light"
                   ? c.button?.contained?.color_light || "#FFFFFF"
-                  : c.button?.contained?.color_dark || "#000000",
+                  : c.button?.contained?.color_dark || "#0B0F1A",
               boxShadow:
                 c.button?.contained?.boxShadow ||
                 "0 1px 4px 0 rgba(0, 0, 0, 0.1)",
               "&:hover": {
+                background:
+                  mode === "light"
+                    ? c.gradient_primary_light ||
+                      c.gradient_primary ||
+                      c.button?.contained?.backgroundColor_light ||
+                      primaryColor
+                    : c.gradient_primary_dark ||
+                      c.gradient_primary ||
+                      c.button?.contained?.backgroundColor_dark ||
+                      primaryColor,
                 backgroundColor:
                   mode === "light"
                     ? c.button?.contained?.backgroundColor_light || primaryColor
@@ -246,7 +274,8 @@ const AppContent = () => {
                   "0 2px 6px 0 rgba(0, 0, 0, 0.15)",
                 transform:
                   c.button?.contained?.hoverTransform || "translateY(-1px)",
-                opacity: 0.9,
+                opacity: 0.92,
+                filter: "saturate(1.08) brightness(1.05)",
               },
             },
             outlined: {

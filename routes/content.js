@@ -318,7 +318,22 @@ router.post(
         msg: "The video is getting ready...",
         id: insertResult.insertId,
         job_id: triggerResult.job_id,
-        status: triggerResult.status,
+        status: triggerResult.status || "processing",
+        data: {
+          id: insertResult.insertId,
+          uid,
+          model: modelJson,
+          ref_photo: uploadResult.filename,
+          prompt: promptText,
+          other: JSON.stringify(otherData),
+          status: "processing",
+          job_id: triggerResult.job_id || null,
+          generated_video: null,
+          video_thumbnail: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          submission_key: submissionKey || null,
+        },
       });
     } catch (err) {
       console.error("Add product content error:", err);
@@ -357,6 +372,7 @@ router.get(
         [req.decode.uid],
       );
 
+      // Only re-queue auto jobs that somehow saved a non-video file as output
       const brokenAutoRows = await query(
         `SELECT id, other, generated_video
          FROM product_content
@@ -364,7 +380,10 @@ router.get(
            AND status = 'active'
            AND generated_video IS NOT NULL
            AND generated_video <> ''
-           AND generated_video NOT REGEXP '\\\\.(mp4|mov|webm|m4v)$'
+           AND LOWER(generated_video) NOT LIKE '%.mp4'
+           AND LOWER(generated_video) NOT LIKE '%.mov'
+           AND LOWER(generated_video) NOT LIKE '%.webm'
+           AND LOWER(generated_video) NOT LIKE '%.m4v'
            AND (
              other LIKE '%"auto_mode":true%'
              OR other LIKE '%"influencer_mode":"auto"%'

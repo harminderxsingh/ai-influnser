@@ -48,6 +48,29 @@ const PromptExamples = ({
   const { hitAxios } = React.useContext(GlobalContext);
   const theme = useTheme();
 
+  const quickRealisticIdeas = React.useMemo(() => {
+    const n = (name || "").trim() || "Ava";
+    const base =
+      (description || "").trim() ||
+      "modern, confident, and approachable lifestyle creator";
+    const real =
+      "Photorealistic real human, natural skin texture with visible pores, subtle imperfections, realistic eyes with catchlights, authentic facial asymmetry, real hair strands. Shot on 85mm lens, f/1.8, soft natural daylight, not CGI, not plastic beauty filter, not over-smoothed skin, 8K detail.";
+    return [
+      {
+        title: "Ultra-Real Profile",
+        prompt: `${n}, ${base}. Close-up head-and-shoulders portrait looking gently at camera, soft genuine smile, clean casual outfit, soft gray studio background. ${real}`,
+      },
+      {
+        title: "Lifestyle Creator",
+        prompt: `${n}, trustworthy lifestyle content creator. ${base}. Natural smile, everyday modern clothing, bright clean background, Instagram profile photo style, true-to-life proportions. ${real}`,
+      },
+      {
+        title: "Brand Ambassador",
+        prompt: `${n}, friendly commercial brand face. ${base}. Warm expression, neat appearance, neutral backdrop, softbox lighting, realistic hands and face. ${real}`,
+      },
+    ];
+  }, [name, description]);
+
   const getPrompt = React.useCallback(async () => {
     const res = await hitAxios({
       path: "/api/admin/get_prompt_t",
@@ -145,6 +168,56 @@ const PromptExamples = ({
 
       <Divider sx={{ my: 3 }} />
 
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          {lang?.quickRealisticIdeas || "Quick realistic ideas"}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          display="block"
+          sx={{ mb: 1.5 }}
+        >
+          {lang?.quickRealisticIdeasDesc ||
+            "Free starter prompts for a real-looking influencer. Click to use."}
+        </Typography>
+        <Stack spacing={1.25}>
+          {quickRealisticIdeas.map((item) => (
+            <Paper
+              key={item.title}
+              onClick={() => onPromptChange(item.prompt)}
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                cursor: "pointer",
+                border: `1px solid ${theme.palette.divider}`,
+                "&:hover": {
+                  borderColor: theme.palette.primary.main,
+                  bgcolor: alpha(theme.palette.primary.main, 0.04),
+                },
+              }}
+            >
+              <Typography variant="caption" fontWeight={800}>
+                {item.title}
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  mt: 0.5,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                {item.prompt}
+              </Typography>
+            </Paper>
+          ))}
+        </Stack>
+      </Box>
+
       <Box
         sx={{
           mb: 3,
@@ -166,7 +239,7 @@ const PromptExamples = ({
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {lang?.recommendedInfluencerPromptsDesc ||
-                "Generate ready-to-use prompts from the character name and description."}
+                "Creates photorealistic (real-looking) portrait prompts from the name and description."}
             </Typography>
           </Box>
           <Button
@@ -390,7 +463,7 @@ const PromptExamples = ({
           sx={{ lineHeight: 1.8, whiteSpace: "pre-line" }}
         >
           {lang?.proTipsDesc ||
-            '• Include "Full body shot" or "Head to toe" for complete figure\n• Specify age, build, height for accurate generation\n• Describe clothing, pose, and background details\n• Add "8K resolution, photorealistic" for quality\n• Mention lighting: "studio lighting", "natural light", etc.'}
+            '• Add age, ethnicity, hair, and outfit for a real look\n• Include "photorealistic, natural skin pores, 85mm lens"\n• Avoid "perfect skin / CGI / plastic / anime"\n• Use Generate Ideas for ready realistic prompts\n• Mentions lighting: soft daylight or studio softbox'}
         </Typography>
       </Box>
     </Box>

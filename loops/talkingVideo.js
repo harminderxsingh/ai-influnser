@@ -1,14 +1,105 @@
+const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 const { query } = require("../database/connection");
 const {
   downloadImage,
   logUsage,
   sendUsageUpdateEmail,
 } = require("../utils/common");
-const { fetchJobStatus, createJob } = require("./api");
-const { frontendUrl } = require("../config.json");
+const { fetchJobStatus, createJob, buildAuth } = require("./api");
+const { mediaToProviderUrl } = require("../utils/mediaUrl");
 
-const TALKING_STATUS_POLL_SECONDS = 30;
+// Lip-sync (D-ID) finishes in seconds — poll often. Full video gens need longer.
+const TALKING_STATUS_POLL_SECONDS = 3;
+
+function isDidProvider(provider) {
+  return String(provider?.provider_key || "").toLowerCase() === "d_id";
+}
+
+/**
+ * D-ID needs a public HTTPS source_url (no localhost / data URLs).
+ * Upload local influencer photos to D-ID /images first.
+ */
+async function uploadImageToDid(provider, localPath) {
+  let buffer;
+  let mime = "image/jpeg";
+  let filename = "face.jpg";
+
+  if (typeof localPath === "string" && localPath.startsWith("data:")) {
+    const match = localPath.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) throw new Error("Invalid data URL for D-ID upload");
+    mime = match[1] || "image/jpeg";
+    buffer = Buffer.from(match[2], "base64");
+    filename = mime.includes("png") ? "face.png" : "face.jpg";
+  } else if (
+    typeof localPath === "string" &&
+    (localPath.startsWith("http://") || localPath.startsWith("https://"))
+  ) {
+    const parsed = new URL(localPath);
+    const isLocal =
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "::1";
+    if (!isLocal && localPath.startsWith("https://")) {
+      return localPath;
+    }
+    const filePath = path.join(
+      __dirname,
+      "../client/public/media",
+      path.basename(parsed.pathname),
+    );
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Media file not found for D-ID: ${filePath}`);
+    }
+    buffer = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    mime = ext === ".png" ? "image/png" : "image/jpeg";
+    filename = path.basename(filePath).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 50);
+  } else {
+    if (!fs.existsSync(localPath)) {
+      throw new Error(`Media file not found for D-ID: ${localPath}`);
+    }
+    buffer = fs.readFileSync(localPath);
+    const ext = path.extname(localPath).toLowerCase();
+    mime = ext === ".png" ? "image/png" : "image/jpeg";
+    filename = path.basename(localPath).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 50);
+  }
+
+  const auth = buildAuth(provider, "talking");
+  const baseUrl = String(provider.talking_base_url || "https://api.d-id.com").replace(
+    /\/+$/,
+    "",
+  );
+  const form = new FormData();
+  form.append("image", new Blob([buffer], { type: mime }), filename);
+
+  const response = await axios.post(`${baseUrl}/images`, form, {
+    headers: { ...auth.headers },
+    timeout: 60000,
+    validateStatus: (s) => s >= 200 && s < 400,
+  });
+
+  const url = response.data?.url;
+  if (!url) {
+    throw new Error(
+      `D-ID image upload returned no url: ${JSON.stringify(response.data)}`,
+    );
+  }
+  console.log(`📎 D-ID image uploaded → ${url}`);
+  return url;
+}
+
+async function resolveTalkingImageUrl(provider, image_url) {
+  const localPath = image_url.startsWith("http")
+    ? image_url
+    : path.join(__dirname, "../client/public/media", image_url);
+
+  if (isDidProvider(provider)) {
+    return uploadImageToDid(provider, localPath);
+  }
+  return mediaToProviderUrl(localPath);
+}
 
 // ============================================
 // HELPERS
@@ -129,14 +220,6 @@ async function notifyUser(user, { task, des, status }) {
   }
 }
 
-async function uploadFileToProvider(localPath) {
-  if (localPath.startsWith("http")) return localPath;
-  const fileName = path.basename(localPath);
-  const publicUrl = `${frontendUrl}/media/${fileName}`;
-  console.log(`📎 Media URL → ${publicUrl}`);
-  return publicUrl;
-}
-
 // ============================================
 // PROCESS SINGLE TALKING CONTENT ITEM
 // ============================================
@@ -207,9 +290,16 @@ async function processTalkingContent(item, provider, fee) {
     // ── success → download and save ───────────────────────────
     let savedPath;
     try {
+      const apiKey =
+        provider?.talking_api_key ||
+        provider?.showcase_api_key ||
+        provider?.txt2img_api_key ||
+        "";
+      console.log(`⬇️  talking_content #${id} downloading video…`);
       savedPath = await downloadImage(
         result.data,
         `${__dirname}/../client/public/media`,
+        { apiKey, timeout: 120000 },
       );
     } catch (err) {
       console.error(
@@ -368,11 +458,10 @@ async function processTalkingContent(item, provider, fee) {
 
   let resolvedImageUrl;
   try {
-    const localPath = image_url.startsWith("http")
-      ? image_url
-      : `${__dirname}/../client/public/media/${image_url}`;
-    resolvedImageUrl = await uploadFileToProvider(localPath);
-    console.log(`📎 talking_content #${id} image URL: ${resolvedImageUrl}`);
+    resolvedImageUrl = await resolveTalkingImageUrl(provider, image_url);
+    console.log(
+      `📎 talking_content #${id} image URL (${provider.provider_key}): ${String(resolvedImageUrl).slice(0, 80)}…`,
+    );
   } catch (err) {
     await setTalkingError(id, `Image URL resolution failed: ${err.message}`);
     await logUsage({
@@ -535,4 +624,48 @@ async function runTalkingVideo({ provider }) {
   }
 }
 
-module.exports = { runTalkingVideo };
+async function triggerTalkingVideo(id) {
+  try {
+    const { getActiveProvider } = require("../utils/aiProvider");
+    const provider = await getActiveProvider("talking");
+    if (!provider?.talking_enabled) {
+      return { success: false, msg: "No active talking video provider found" };
+    }
+
+    const fee = await getCreditFee();
+    if (fee < 1) {
+      return {
+        success: false,
+        msg: "Talking video credit fee is not configured",
+      };
+    }
+
+    const [item] = await query(`SELECT * FROM talking_content WHERE id = ?`, [
+      id,
+    ]);
+    if (!item) return { success: false, msg: "Talking video task not found" };
+
+    if (!["processing", "submitting"].includes(item.status)) {
+      return { success: true, status: item.status, job_id: item.job_id };
+    }
+
+    await processTalkingContent(item, provider, fee);
+
+    const [fresh] = await query(
+      `SELECT status, job_id, error_message FROM talking_content WHERE id = ?`,
+      [id],
+    );
+
+    return {
+      success: true,
+      status: fresh?.status || item.status,
+      job_id: fresh?.job_id || null,
+      error_message: fresh?.error_message || null,
+    };
+  } catch (err) {
+    console.error("triggerTalkingVideo failed:", err.message);
+    return { success: false, msg: err.message };
+  }
+}
+
+module.exports = { runTalkingVideo, triggerTalkingVideo };

@@ -16,6 +16,8 @@ import SocialPublishHistory from "../socialPublishHistory/SocialPublishHistory";
 import TalkingVideo from "../talkingVideo/TalkingVideo";
 import BuyCredits from "../credits/BuyCredits";
 import Referrals from "../referrals/Referrals";
+import TextContentWriter from "../textContent/TextContentWriter";
+import Books from "../books/Books";
 
 const Content = ({ selectedMenu, web }) => {
   const { lang } = React.useContext(TranslateContext);
@@ -26,6 +28,8 @@ const Content = ({ selectedMenu, web }) => {
       {selectedMenu === "influencers" && <Influencers lang={lang} />}
       {selectedMenu === "gallery" && <Gallery lang={lang} />}
       {selectedMenu === "content" && <ContentComp lang={lang} />}
+      {selectedMenu === "text-content" && <TextContentWriter lang={lang} />}
+      {selectedMenu === "books" && <Books lang={lang} />}
       {selectedMenu === "script-to-video" && <ScriptVideo lang={lang} />}
       {selectedMenu === "usage" && <Usage lang={lang} />}
       {selectedMenu === "buy-credits" && <BuyCredits lang={lang} />}

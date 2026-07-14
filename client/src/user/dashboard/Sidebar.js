@@ -19,8 +19,7 @@ import {
   Close as CloseIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
-
-const drawerWidth = 240;
+import { usePanelChrome } from "../../utils/usePanelChrome";
 
 const Sidebar = ({
   lang,
@@ -36,6 +35,8 @@ const Sidebar = ({
   web,
 }) => {
   const [search, setSearch] = React.useState("");
+  const chrome = usePanelChrome(240);
+  const drawerWidth = chrome.drawerWidth;
 
   // ── Filter logic ─────────────────────────────────────────────────────────
   const filteredMenuItems = React.useMemo(() => {
@@ -102,6 +103,7 @@ const Sidebar = ({
         backgroundColor: theme.palette.background.default,
         display: "flex",
         flexDirection: "column",
+        ...chrome.sidebarInnerSx,
       }}
     >
       {/* ── Logo Section ── */}
@@ -112,6 +114,7 @@ const Sidebar = ({
           alignItems: "center",
           justifyContent: "space-between",
           borderBottom: `1px solid ${theme.palette.divider}`,
+          ...chrome.brandSx,
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -121,8 +124,8 @@ const Sidebar = ({
               src={`/media/${web.site_logo}`}
               alt={web?.site_name || "Logo"}
               sx={{
-                height: 40,
-                maxWidth: 130,
+                height: 100,
+                maxWidth: 200,
                 objectFit: "contain",
               }}
             />
@@ -172,6 +175,7 @@ const Sidebar = ({
             border: `1px solid ${theme.palette.divider}`,
             backgroundColor: theme.palette.action.hover,
             transition: "border-color 0.2s, box-shadow 0.2s",
+            ...chrome.searchSx,
             "&:focus-within": {
               borderColor: theme.palette.primary.main,
               boxShadow: `0 0 0 3px ${theme.palette.primary.main}18`,
@@ -227,11 +231,13 @@ const Sidebar = ({
                         py: 1.2,
                         px: 2,
                         minHeight: 44,
+                        ...chrome.navItemSx(isParentActive),
                         "&.Mui-selected": {
                           backgroundColor: `${theme.palette.primary.main}18`,
                           color: theme.palette.primary.main,
+                          ...chrome.navItemSx(true),
                           "& .MuiListItemIcon-root": {
-                            color: theme.palette.primary.main,
+                            color: "inherit",
                           },
                         },
                         "&:hover": {
@@ -378,6 +384,7 @@ const Sidebar = ({
             boxSizing: "border-box",
             width: drawerWidth,
             border: "none",
+            ...chrome.sidebarPaperSx,
           },
         }}
       >
@@ -394,6 +401,7 @@ const Sidebar = ({
             width: drawerWidth,
             border: "none",
             borderRight: `1px solid ${theme.palette.divider}`,
+            ...chrome.sidebarPaperSx,
           },
         }}
         open

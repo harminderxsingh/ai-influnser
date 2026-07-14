@@ -383,24 +383,62 @@ function deleteFile(filePath) {
   }
 }
 
-async function downloadImage(imageUrl, savePath) {
-  // Extract the extension from the URL (handles query strings too)
-  const urlPathname = new URL(imageUrl).pathname;
-  const ext = path.extname(urlPathname); // e.g. ".jpg", ".png"
+async function downloadImage(imageUrl, savePath, options = {}) {
+  fs.mkdirSync(savePath, { recursive: true });
 
+  // data:image/png;base64,... (Google Imagen sync results)
+  if (String(imageUrl).startsWith("data:")) {
+    const match = String(imageUrl).match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) {
+      throw new Error("Invalid data URI for media download");
+    }
+    const mime = match[1].toLowerCase();
+    const ext =
+      mime.includes("png")
+        ? ".png"
+        : mime.includes("webp")
+          ? ".webp"
+          : mime.includes("mp4") || mime.includes("video")
+            ? ".mp4"
+            : ".jpg";
+    const fileName = `${randomstring.generate(5)}${ext}`;
+    const fullPath = path.join(savePath, fileName);
+    fs.writeFileSync(fullPath, Buffer.from(match[2], "base64"));
+    return fileName;
+  }
+
+  // Extract the extension from the URL (handles query strings too)
+  let ext = "";
+  try {
+    const urlPathname = new URL(imageUrl).pathname;
+    ext = path.extname(urlPathname); // e.g. ".jpg", ".png"
+  } catch {
+    ext = "";
+  }
+
+  // Google Veo download URLs often have no file extension
   if (!ext) {
-    throw new Error(`Could not determine file extension from URL: ${imageUrl}`);
+    if (/video|mp4|veo/i.test(String(imageUrl))) ext = ".mp4";
+    else ext = ".jpg";
   }
 
   const rs = randomstring.generate(5);
-  const fileName = `${rs}${ext}`; // e.g. "myrand.jpg"
-  const fullPath = path.join(savePath, fileName); // e.g. "/uploads/myrand.jpg"
+  const fileName = `${rs}${ext}`;
+  const fullPath = path.join(savePath, fileName);
 
-  // Ensure the save directory exists
-  fs.mkdirSync(savePath, { recursive: true });
+  const headers = { ...(options.headers || {}) };
+  const apiKey = options.apiKey || options.authToken;
+  // xAI / imagen.x.ai CDN often needs the API key
+  if (apiKey && !headers.Authorization && /\.x\.ai\b/i.test(String(imageUrl))) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
 
-  // Download the image as a stream and pipe it to disk
-  const response = await axios.get(imageUrl, { responseType: "stream" });
+  const response = await axios.get(imageUrl, {
+    responseType: "stream",
+    timeout: options.timeout || 45000,
+    headers,
+    maxRedirects: 5,
+  });
 
   await new Promise((resolve, reject) => {
     const writer = fs.createWriteStream(fullPath);
@@ -409,7 +447,7 @@ async function downloadImage(imageUrl, savePath) {
     writer.on("error", reject);
   });
 
-  return fileName; // e.g. "myrand.jpg"
+  return fileName;
 }
 
 async function logUsage({ uid = null, task, credits = null, status, des }) {

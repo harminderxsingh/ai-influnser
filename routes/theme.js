@@ -460,6 +460,7 @@ router.get("/get-theme-config", checkLicense, (req, res) => {
     res.json({
       success: true,
       data,
+      themeId: activeId,
       msg: "Theme configuration fetched successfully",
     });
   } catch (err) {

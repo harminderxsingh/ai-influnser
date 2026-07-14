@@ -9,7 +9,9 @@ routes/themes/active-theme.json
 # Sensitive config — contains DB creds, JWT secret, URLs
 config.json
 .env
+.env.development
 client/.env
+client/.env.development.local
 
 # OS / logs
 .DS_Store

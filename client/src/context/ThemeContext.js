@@ -121,12 +121,23 @@ const defaultThemeConfig = {
   },
 
   appBar: {
-    height: 64,
+    height: 88,
     padding: "0 24px",
     boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1)",
     backgroundColor_light: "#FFFFFF",
     backgroundColor_dark: "#1E293B",
     borderBottom: "none",
+    // Frontend header / footer logo (admin: Web Theme → Components → AppBar)
+    logoHeightXs: 56,
+    logoHeightSm: 64,
+    logoHeightMd: 72,
+    logoMaxWidthXs: 200,
+    logoMaxWidthSm: 240,
+    logoMaxWidthMd: 280,
+    logoMinWidthXs: 120,
+    logoMinWidthMd: 140,
+    footerLogoHeight: 80,
+    footerLogoMaxWidth: 280,
   },
 
   drawer: {
@@ -319,6 +330,7 @@ const defaultThemeConfig = {
 
 export const ThemeDataProvider = ({ children }) => {
   const [themeConfig, setThemeConfig] = useState(defaultThemeConfig);
+  const [themeId, setThemeId] = useState("default");
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState("dark");
   const [licenseRequired, setLicenseRequired] = useState(false); // 🆕
@@ -349,6 +361,9 @@ export const ThemeDataProvider = ({ children }) => {
 
         if (response.data.success && response.data.data) {
           try {
+            if (response.data.themeId) {
+              setThemeId(response.data.themeId);
+            }
             const mergedConfig = deepMerge(
               defaultThemeConfig,
               response.data.data,
@@ -422,6 +437,7 @@ export const ThemeDataProvider = ({ children }) => {
   const value = {
     themeConfig,
     setThemeConfig,
+    themeId,
     loading,
     mode,
     toggleColorMode,

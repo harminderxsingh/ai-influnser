@@ -21,6 +21,7 @@ const ProductContentList = ({ hitAxios, lang, fetchContents, contents }) => {
         post: true,
         admin: false,
         obj: { id },
+        showLoading: false,
       });
       if (res.data.success) {
         fetchContents();

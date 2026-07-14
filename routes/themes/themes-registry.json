@@ -3,15 +3,15 @@
     {
       "id": "default",
       "name": "Default Theme",
-      "description": "Factory default — protected and cannot be deleted",
+      "description": "Indigo → violet → cyan gradient brand — modern colorful default",
       "isProtected": true,
       "createdAt": "2026-03-16T13:44:16.755Z",
-      "updatedAt": "2026-03-16T13:44:16.755Z"
+      "updatedAt": "2026-07-11T14:22:27.247Z"
     },
     {
       "id": "theme-sunset",
       "name": "Sunset",
-      "description": "Warm amber and rose tones inspired by golden hour",
+      "description": "Warm amber, rose and gold hour gradients",
       "isProtected": false,
       "createdAt": "2026-03-16T19:42:00.000Z",
       "updatedAt": "2026-03-16T19:42:00.000Z"
@@ -19,7 +19,7 @@
     {
       "id": "theme-forest",
       "name": "Forest",
-      "description": "Deep greens and earthy tones inspired by ancient woodland",
+      "description": "Emerald to sky-blue nature gradients",
       "isProtected": false,
       "createdAt": "2026-03-16T19:42:00.000Z",
       "updatedAt": "2026-03-16T19:42:00.000Z"
@@ -27,7 +27,7 @@
     {
       "id": "theme-violet",
       "name": "Violet",
-      "description": "Rich purple and lavender tones inspired by twilight and amethyst",
+      "description": "Purple to pink twilight gradients",
       "isProtected": false,
       "createdAt": "2026-03-16T19:43:00.000Z",
       "updatedAt": "2026-03-16T19:43:00.000Z"
@@ -35,7 +35,7 @@
     {
       "id": "theme-sharp",
       "name": "Sharp",
-      "description": "Brutalist design — hard edges, zero radius, bold and unapologetic",
+      "description": "Electric blue × magenta hard-edge gradients",
       "isProtected": false,
       "createdAt": "2026-03-16T19:50:00.000Z",
       "updatedAt": "2026-03-16T19:50:00.000Z"
@@ -43,7 +43,7 @@
     {
       "id": "theme-bubbly",
       "name": "Bubbly",
-      "description": "Maximum roundness, soft shadows, playful and approachable UI",
+      "description": "Rose × purple × sky playful gradient UI",
       "isProtected": false,
       "createdAt": "2026-03-16T19:50:00.000Z",
       "updatedAt": "2026-03-16T19:50:00.000Z"
@@ -51,7 +51,7 @@
     {
       "id": "theme-glass",
       "name": "Glass",
-      "description": "Frosted glass aesthetic — translucent surfaces, heavy blur, airy depth",
+      "description": "Indigo × cyan × pink frosted gradient glass",
       "isProtected": false,
       "createdAt": "2026-03-16T19:50:00.000Z",
       "updatedAt": "2026-03-16T19:50:00.000Z"
@@ -59,7 +59,7 @@
     {
       "id": "theme-editorial",
       "name": "Editorial",
-      "description": "Newspaper-inspired — serif typography, tight spacing, high contrast, minimal chrome",
+      "description": "Burgundy × gold magazine color gradients",
       "isProtected": false,
       "createdAt": "2026-03-16T19:50:00.000Z",
       "updatedAt": "2026-03-16T19:50:00.000Z"
@@ -67,7 +67,7 @@
     {
       "id": "theme-cyber",
       "name": "Cyber",
-      "description": "Terminal-inspired — neon glow effects, monospace font, dark-first hacker aesthetic",
+      "description": "Neon green × cyan × magenta terminal gradients",
       "isProtected": false,
       "createdAt": "2026-03-16T19:50:00.000Z",
       "updatedAt": "2026-03-16T19:50:00.000Z"
@@ -75,7 +75,7 @@
     {
       "id": "theme-zen",
       "name": "Zen",
-      "description": "Maximum whitespace, hairline borders, near-invisible shadows — calm and meditative",
+      "description": "Teal × indigo calm gradient minimalism",
       "isProtected": false,
       "createdAt": "2026-03-16T19:50:00.000Z",
       "updatedAt": "2026-03-16T19:50:00.000Z"
@@ -83,7 +83,7 @@
     {
       "id": "theme-same",
       "name": "Same",
-      "description": "Smae theme but look like new fresh",
+      "description": "Indigo → pink fresh gradient panels",
       "isProtected": false,
       "createdAt": "2026-03-16T19:50:00.000Z",
       "updatedAt": "2026-03-16T19:50:00.000Z"
@@ -91,7 +91,7 @@
     {
       "id": "theme-darkocean",
       "name": "dark Ocean",
-      "description": "Bluish design with ocean feel",
+      "description": "Green × ocean-blue depth gradients",
       "isProtected": false,
       "createdAt": "2026-03-16T19:50:00.000Z",
       "updatedAt": "2026-03-16T19:50:00.000Z"

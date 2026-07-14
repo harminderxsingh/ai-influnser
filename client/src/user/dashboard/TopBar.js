@@ -21,6 +21,7 @@ import {
 } from "@mui/icons-material";
 import ProfileComp from "./ProfileComp";
 import { UserContext } from "../../context/UserContext";
+import { usePanelChrome } from "../../utils/usePanelChrome";
 
 const TopBar = ({
   lang,
@@ -33,6 +34,7 @@ const TopBar = ({
   web,
 }) => {
   const { userData } = React.useContext(UserContext);
+  const chrome = usePanelChrome(240);
 
   const plan = React.useMemo(() => {
     if (!userData?.plan) return null;
@@ -81,7 +83,7 @@ const TopBar = ({
                 component="img"
                 src={`/media/${web.site_logo}`}
                 alt={web?.site_name || "Logo"}
-                sx={{ height: 26, objectFit: "contain" }}
+                sx={{ height: 100, objectFit: "contain" }}
               />
             ) : (
               <Typography
@@ -131,6 +133,7 @@ const TopBar = ({
             alignItems: "center",
             p: 3,
             pb: 0,
+            ...chrome.topBarSx,
           }}
         >
           {/* Breadcrumb */}

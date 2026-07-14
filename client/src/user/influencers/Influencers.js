@@ -52,6 +52,7 @@ const Influencers = ({ lang }) => {
   });
 
   const [influencers, setInfluencers] = React.useState([]);
+  const prevStatusRef = React.useRef({});
 
   const steps = [
     lang.creationMethod || "Creation Method",
@@ -66,13 +67,54 @@ const Influencers = ({ lang }) => {
         post: false,
         admin: false,
         showLoading: false,
+        showSnackbar: false,
       });
 
       if (res?.data?.success) {
-        setInfluencers(res.data.data || []);
+        const nextList = res.data.data || [];
+
+        const prev = prevStatusRef.current || {};
+        nextList.forEach((inf) => {
+          const wasBusy =
+            prev[inf.id] === "processing" || prev[inf.id] === "submitting";
+          if (wasBusy && inf.status === "active" && inf.photo_url) {
+            setState((s) => ({
+              ...s,
+              snackbar: {
+                open: true,
+                message:
+                  lang.characterReady || `"${inf.name}" is ready`,
+                severity: "success",
+              },
+            }));
+          }
+        });
+        prevStatusRef.current = Object.fromEntries(
+          nextList.map((inf) => [inf.id, inf.status]),
+        );
+
+        // Merge server list with any local optimistic processing cards not yet returned
+        setInfluencers((prevList) => {
+          const byId = new Map(nextList.map((item) => [item.id, item]));
+          for (const item of prevList) {
+            if (
+              item?._optimistic &&
+              (item.status === "processing" || item.status === "submitting") &&
+              !byId.has(item.id)
+            ) {
+              byId.set(item.id, item);
+            }
+          }
+          return Array.from(byId.values()).sort((a, b) => {
+            const ta = new Date(a.created_at || 0).getTime();
+            const tb = new Date(b.created_at || 0).getTime();
+            return tb - ta;
+          });
+        });
+
         if (closeDialog) {
-          setState((prev) => ({
-            ...prev,
+          setState((prevState) => ({
+            ...prevState,
             dialog: false,
             activeStep: 0,
             creationType: "upload",
@@ -80,6 +122,7 @@ const Influencers = ({ lang }) => {
             photoFile: null,
             name: "",
             description: "",
+            prompt: "",
             submissionKey: "",
           }));
         }
@@ -94,21 +137,23 @@ const Influencers = ({ lang }) => {
         },
       }));
     }
-  }, [hitAxios, lang.errorLoadingInfluencers]);
+  }, [hitAxios, lang.errorLoadingInfluencers, lang.characterReady]);
 
   React.useEffect(() => {
     fetchInfluencers();
   }, [fetchInfluencers]);
 
+  // Auto-refresh while any influencer is generating (every 2.5s)
   React.useEffect(() => {
-    const hasProcessingInfluencer = influencers.some(
-      (influencer) =>
-        influencer.status === "processing" || influencer.status === "submitting",
+    const hasProcessing = influencers.some(
+      (inf) => inf.status === "processing" || inf.status === "submitting",
     );
+    if (!hasProcessing) return undefined;
 
-    if (!hasProcessingInfluencer) return undefined;
+    const intervalId = setInterval(() => {
+      fetchInfluencers();
+    }, 2500);
 
-    const intervalId = setInterval(fetchInfluencers, 10000);
     return () => clearInterval(intervalId);
   }, [fetchInfluencers, influencers]);
 
@@ -236,19 +281,28 @@ const Influencers = ({ lang }) => {
     submitLockRef.current = true;
     setState((prev) => ({ ...prev, loading: true }));
 
+    const snapshot = {
+      name: state.name,
+      description: state.description,
+      creationType: state.creationType,
+      prompt: state.prompt,
+      photoFile: state.photoFile,
+      submissionKey: state.submissionKey || createSubmissionKey(),
+    };
+
     try {
       const formData = new FormData();
-      formData.append("name", state.name);
-      formData.append("description", state.description);
-      formData.append("creation_type", state.creationType);
-      formData.append("submission_key", state.submissionKey);
+      formData.append("name", snapshot.name);
+      formData.append("description", snapshot.description);
+      formData.append("creation_type", snapshot.creationType);
+      formData.append("submission_key", snapshot.submissionKey);
 
-      if (state.creationType === "prompt") {
-        formData.append("prompt", state.prompt);
+      if (snapshot.creationType === "prompt") {
+        formData.append("prompt", snapshot.prompt);
       }
 
-      if (state.photoFile) {
-        formData.append("photo", state.photoFile);
+      if (snapshot.photoFile) {
+        formData.append("photo", snapshot.photoFile);
       }
 
       const res = await hitAxios({
@@ -256,14 +310,73 @@ const Influencers = ({ lang }) => {
         post: true,
         admin: false,
         obj: formData,
+        showLoading: false,
+        showSnackbar: false,
       });
 
       if (res?.data?.success) {
-        showSnackbar(res.data.msg, "success");
-        fetchInfluencers({ closeDialog: true });
+        const created = res.data.data || {};
+        const newId =
+          created.id ||
+          res.data.id ||
+          `temp-${snapshot.submissionKey || Date.now()}`;
+
+        const optimistic = {
+          id: newId,
+          uid: created.uid,
+          name: snapshot.name,
+          description: snapshot.description,
+          creation_type: snapshot.creationType,
+          prompt:
+            snapshot.creationType === "prompt" ? snapshot.prompt : null,
+          photo_url: created.photo_url || null,
+          status: created.status || "processing",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          _optimistic: true,
+        };
+
+        prevStatusRef.current = {
+          ...prevStatusRef.current,
+          [optimistic.id]: optimistic.status,
+        };
+
+        // Show processing card immediately, then close dialog (no page reload)
+        setInfluencers((prev) => {
+          if (prev.some((item) => item.id === optimistic.id)) return prev;
+          return [optimistic, ...prev];
+        });
+
+        setState((prev) => ({
+          ...prev,
+          dialog: false,
+          activeStep: 0,
+          creationType: "upload",
+          photoPreview: null,
+          photoFile: null,
+          name: "",
+          description: "",
+          prompt: "",
+          submissionKey: "",
+          loading: false,
+          snackbar: {
+            open: true,
+            message:
+              res.data.msg ||
+              lang.characterQueued ||
+              "Character is processing…",
+            severity: "success",
+          },
+        }));
+        submitLockRef.current = false;
+
+        // Soft refresh — merge keeps optimistic card until server returns it
+        setTimeout(() => {
+          fetchInfluencers();
+        }, 400);
         setTimeout(() => {
           getUserData();
-        }, 3000);
+        }, 1500);
         return;
       }
 
@@ -283,6 +396,7 @@ const Influencers = ({ lang }) => {
         post: true,
         admin: false,
         obj: { id },
+        showLoading: false,
       });
 
       if (res?.data?.success) {
@@ -329,7 +443,11 @@ const Influencers = ({ lang }) => {
               influencer={{
                 ...influencer,
                 photo_url: influencer.photo_url
-                  ? `/media/${influencer.photo_url}`
+                  ? `/media/${influencer.photo_url}${
+                      influencer.updated_at
+                        ? `?t=${encodeURIComponent(influencer.updated_at)}`
+                        : ""
+                    }`
                   : null,
               }}
               onDelete={handleDelete}
@@ -431,6 +549,7 @@ const Influencers = ({ lang }) => {
 
               {state.activeStep === steps.length - 1 ? (
                 <Button
+                  type="button"
                   variant="contained"
                   onClick={handleSubmit}
                   disabled={state.loading}

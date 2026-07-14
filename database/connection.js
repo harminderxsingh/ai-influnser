@@ -1,16 +1,12 @@
 const mysql = require("mysql2/promise");
-const fs = require("fs");
 const path = require("path");
+const { loadAppConfig } = require("../utils/loadConfig");
 
 let pool = null;
 
 function getConfig() {
-  const configPath = path.join(__dirname, "../config.json");
-  if (fs.existsSync(configPath)) {
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    return config.database;
-  }
-  return null;
+  const config = loadAppConfig();
+  return config?.database || null;
 }
 
 function createPool() {
@@ -33,7 +29,13 @@ function createPool() {
       connectTimeout: 10000,
     });
 
-    console.log("Database pool created");
+    const appConfig = loadAppConfig();
+    console.log(
+      `Database pool created → ${config.database}` +
+        (appConfig?.__configPath
+          ? ` (${path.basename(appConfig.__configPath)})`
+          : ""),
+    );
     return pool;
   } catch (error) {
     console.error("Failed to create database pool:", error);
@@ -75,7 +77,6 @@ module.exports = {
     if (!currentPool) {
       throw new Error("Database not configured");
     }
-    // ✅ FIX: Destructure to get only rows
     const [rows] = await currentPool.query(sql, params);
     return rows;
   },

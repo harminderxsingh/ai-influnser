@@ -53,7 +53,21 @@ const FEATURES = [
   { key: "reel", label: "Reel Maker" },
   { key: "showcase", label: "Product Showcase" },
   { key: "talking", label: "Talking Video" },
+  { key: "txt2txt", label: "Text to Text (Content Writer)" },
 ];
+
+const TXT2TXT_DEFAULTS = {
+  txt2txt_job_id_path: "choices[0].message.content",
+  txt2txt_state_path: "",
+  txt2txt_success_state: "",
+  txt2txt_failed_state: "",
+  txt2txt_result_path: "choices[0].message.content",
+  txt2txt_status_method: "GET",
+  txt2txt_create_method: "POST",
+  txt2txt_auth_type: "bearer",
+  txt2txt_auth_header_key: "Authorization",
+  txt2txt_auth_header_prefix: "Bearer",
+};
 
 const TALKING_DEFAULTS = {
   talking_job_id_path: "jobId",
@@ -95,269 +109,442 @@ const defaultForm = {
   is_default: false,
   ...FEATURES.reduce((acc, f) => ({ ...acc, ...defaultFeature(f.key) }), {}),
   ...TALKING_DEFAULTS,
+  ...TXT2TXT_DEFAULTS,
 };
 
-const USEVELIX_PREFILL = {
+// ── GOOGLE AI — one provider; models per feature (Gemini / Imagen / Veo) ─────
+const GOOGLE_PREFILL = {
   ...defaultForm,
-  name: "Usevelix",
-  provider_key: "usevelix",
-  is_default: false,
+  name: "Google AI",
+  provider_key: "google",
+  is_default: true,
 
-  // ── TEXT TO IMAGE ──
-  txt2img_enabled: true,
-  txt2img_base_url: "https://usevelix.com",
-  txt2img_api_key: "",
-  txt2img_auth_type: "bearer",
-  txt2img_auth_header_key: "Authorization",
-  txt2img_auth_header_prefix: "Bearer",
-  txt2img_create_endpoint: "/api/v1/generate/text-to-image",
-  txt2img_create_method: "POST",
-  txt2img_create_payload: JSON.stringify({ prompt: "{{prompt}}" }, null, 2),
-  txt2img_job_id_path: "jobId",
-  txt2img_status_endpoint: "/api/v1/jobs/{{taskId}}",
-  txt2img_status_method: "GET",
-  txt2img_state_path: "status",
-  txt2img_success_state: "done",
-  txt2img_failed_state: "failed",
-  txt2img_result_path: "resultUrl",
-
-  // ── IMAGE TO IMAGE ──
-  img2img_enabled: true,
-  img2img_base_url: "https://usevelix.com",
-  img2img_api_key: "",
-  img2img_auth_type: "bearer",
-  img2img_auth_header_key: "Authorization",
-  img2img_auth_header_prefix: "Bearer",
-  img2img_create_endpoint: "/api/v1/generate/smart-edit",
-  img2img_create_method: "POST",
-  img2img_create_payload: JSON.stringify(
-    { imageUrl: "{{reference_url}}", prompt: "{{prompt}}" },
+  // Text-to-Text → Gemini
+  txt2txt_enabled: true,
+  txt2txt_base_url: "https://generativelanguage.googleapis.com",
+  txt2txt_api_key: "",
+  txt2txt_auth_type: "custom_header",
+  txt2txt_auth_header_key: "x-goog-api-key",
+  txt2txt_auth_header_prefix: "",
+  txt2txt_create_endpoint:
+    "/v1beta/models/gemini-2.0-flash:generateContent",
+  txt2txt_create_method: "POST",
+  txt2txt_create_payload: JSON.stringify(
+    { model: "gemini-2.0-flash" },
     null,
     2,
   ),
-  img2img_job_id_path: "jobId",
-  img2img_status_endpoint: "/api/v1/jobs/{{taskId}}",
-  img2img_status_method: "GET",
-  img2img_state_path: "status",
-  img2img_success_state: "done",
-  img2img_failed_state: "failed",
-  img2img_result_path: "resultUrl",
+  txt2txt_job_id_path: "candidates[0].content.parts[0].text",
+  txt2txt_status_endpoint: "",
+  txt2txt_status_method: "GET",
+  txt2txt_state_path: "",
+  txt2txt_success_state: "",
+  txt2txt_failed_state: "",
+  txt2txt_result_path: "candidates[0].content.parts[0].text",
 
-  // ── REEL MAKER ──
-  reel_enabled: true,
-  reel_base_url: "https://usevelix.com",
-  reel_api_key: "",
-  reel_auth_type: "bearer",
-  reel_auth_header_key: "Authorization",
-  reel_auth_header_prefix: "Bearer",
-  reel_create_endpoint: "/api/v1/generate/motion-video",
-  reel_create_method: "POST",
-  reel_create_payload: JSON.stringify(
+  // Text-to-Image → Imagen (Google paid billing required; prefer Grok for free/credits)
+  txt2img_enabled: false,
+  txt2img_base_url: "https://generativelanguage.googleapis.com",
+  txt2img_api_key: "",
+  txt2img_auth_type: "custom_header",
+  txt2img_auth_header_key: "x-goog-api-key",
+  txt2img_auth_header_prefix: "",
+  txt2img_create_endpoint: "/v1beta/models/imagen-4.0-fast-generate-001:predict",
+  txt2img_create_method: "POST",
+  txt2img_create_payload: JSON.stringify(
     {
-      imageUrl: "{{character_image_url}}",
-      videoUrl: "{{reference_video_url}}",
-      aspectRatio: "9:16",
+      instances: [{ prompt: "{{prompt}}" }],
+      parameters: { sampleCount: 1, aspectRatio: "9:16" },
     },
     null,
     2,
   ),
-  reel_job_id_path: "jobId",
-  reel_status_endpoint: "/api/v1/jobs/{{taskId}}",
+  txt2img_job_id_path: "predictions[0].bytesBase64Encoded",
+  txt2img_status_endpoint: "",
+  txt2img_status_method: "GET",
+  txt2img_state_path: "",
+  txt2img_success_state: "",
+  txt2img_failed_state: "",
+  txt2img_result_path: "@b64data(predictions[0].bytesBase64Encoded)",
+
+  // Image-to-Image → Imagen (paid only)
+  img2img_enabled: false,
+  img2img_base_url: "https://generativelanguage.googleapis.com",
+  img2img_api_key: "",
+  img2img_auth_type: "custom_header",
+  img2img_auth_header_key: "x-goog-api-key",
+  img2img_auth_header_prefix: "",
+  img2img_create_endpoint:
+    "/v1beta/models/imagen-3.0-capability-001:predict",
+  img2img_create_method: "POST",
+  img2img_create_payload: JSON.stringify(
+    {
+      instances: [
+        {
+          prompt: "{{prompt}}",
+          referenceImages: [
+            {
+              referenceType: "REFERENCE_TYPE_SUBJECT",
+              referenceId: 1,
+              referenceImage: {
+                bytesBase64Encoded: "@url_to_b64:{{reference_url}}",
+              },
+            },
+          ],
+        },
+      ],
+      parameters: { sampleCount: 1, aspectRatio: "9:16" },
+    },
+    null,
+    2,
+  ),
+  img2img_job_id_path: "predictions[0].bytesBase64Encoded",
+  img2img_status_endpoint: "",
+  img2img_status_method: "GET",
+  img2img_state_path: "",
+  img2img_success_state: "",
+  img2img_failed_state: "",
+  img2img_result_path: "@b64data(predictions[0].bytesBase64Encoded)",
+
+  // Reel / Showcase / Talking → Veo
+  reel_enabled: true,
+  reel_base_url: "https://generativelanguage.googleapis.com",
+  reel_api_key: "",
+  reel_auth_type: "custom_header",
+  reel_auth_header_key: "x-goog-api-key",
+  reel_auth_header_prefix: "",
+  reel_create_endpoint:
+    "/v1beta/models/veo-3.1-fast-generate-preview:predictLongRunning",
+  reel_create_method: "POST",
+  reel_create_payload: JSON.stringify(
+    {
+      instances: [
+        {
+          prompt:
+            "The character is performing the action from the reference video, cinematic motion, natural movement",
+          image: {
+            bytesBase64Encoded: "@url_to_b64:{{character_image_url}}",
+            mimeType: "image/jpeg",
+          },
+        },
+      ],
+      parameters: {
+        aspectRatio: "9:16",
+        durationSeconds: 8,
+        personGeneration: "allow_adult",
+      },
+    },
+    null,
+    2,
+  ),
+  reel_job_id_path: "name",
+  reel_status_endpoint: "/v1beta/{{taskId}}",
+  reel_status_method: "GET",
+  reel_state_path: "done",
+  reel_success_state: "true",
+  reel_failed_state: "error",
+  reel_result_path:
+    "response.generateVideoResponse.generatedSamples[0].video.uri",
+
+  showcase_enabled: true,
+  showcase_base_url: "https://generativelanguage.googleapis.com",
+  showcase_api_key: "",
+  showcase_auth_type: "custom_header",
+  showcase_auth_header_key: "x-goog-api-key",
+  showcase_auth_header_prefix: "",
+  showcase_create_endpoint:
+    "/v1beta/models/veo-3.1-fast-generate-preview:predictLongRunning",
+  showcase_create_method: "POST",
+  showcase_create_payload: JSON.stringify(
+    {
+      instances: [
+        {
+          prompt: "{{text}}",
+          image: {
+            bytesBase64Encoded: "@url_to_b64:{{image_url_1}}",
+            mimeType: "image/jpeg",
+          },
+          lastFrame: {
+            bytesBase64Encoded: "@url_to_b64:{{image_url_2}}",
+            mimeType: "image/jpeg",
+          },
+        },
+      ],
+      parameters: {
+        aspectRatio: "{{aspect_ratio}}",
+        durationSeconds: 8,
+        personGeneration: "allow_adult",
+      },
+    },
+    null,
+    2,
+  ),
+  showcase_job_id_path: "name",
+  showcase_status_endpoint: "/v1beta/{{taskId}}",
+  showcase_status_method: "GET",
+  showcase_state_path: "done",
+  showcase_success_state: "true",
+  showcase_failed_state: "error",
+  showcase_result_path:
+    "response.generateVideoResponse.generatedSamples[0].video.uri",
+
+  talking_enabled: true,
+  talking_base_url: "https://generativelanguage.googleapis.com",
+  talking_api_key: "",
+  talking_auth_type: "custom_header",
+  talking_auth_header_key: "x-goog-api-key",
+  talking_auth_header_prefix: "",
+  talking_create_endpoint:
+    "/v1beta/models/veo-3.1-fast-generate-preview:predictLongRunning",
+  talking_create_method: "POST",
+  talking_create_payload: JSON.stringify(
+    {
+      instances: [
+        {
+          prompt:
+            'The person in the image talks directly to the camera and says: "{{text}}". Natural lip movement, clear speech, realistic talking-head, cinematic lighting, {{aspectRatio}} vertical framing.',
+          image: {
+            bytesBase64Encoded: "@url_to_b64:{{imageUrl}}",
+            mimeType: "image/jpeg",
+          },
+        },
+      ],
+      parameters: {
+        aspectRatio: "{{aspectRatio}}",
+        durationSeconds: 8,
+        personGeneration: "allow_adult",
+      },
+    },
+    null,
+    2,
+  ),
+  talking_job_id_path: "name",
+  talking_status_endpoint: "/v1beta/{{taskId}}",
+  talking_status_method: "GET",
+  talking_state_path: "done",
+  talking_success_state: "true",
+  talking_failed_state: "error",
+  talking_result_path:
+    "response.generateVideoResponse.generatedSamples[0].video.uri",
+};
+
+// ── xAI GROK — full stack alternate (text + images + video + talking) ────────
+const XAI_PREFILL = {
+  ...defaultForm,
+  name: "xAI Grok Imagine",
+  provider_key: "xai_grok",
+  is_default: false,
+
+  txt2txt_enabled: true,
+  txt2txt_base_url: "https://api.x.ai",
+  txt2txt_api_key: "",
+  txt2txt_auth_type: "bearer",
+  txt2txt_auth_header_key: "Authorization",
+  txt2txt_auth_header_prefix: "Bearer",
+  txt2txt_create_endpoint: "/v1/chat/completions",
+  txt2txt_create_method: "POST",
+  txt2txt_create_payload: JSON.stringify(
+    {
+      model: "grok-3-mini",
+      messages: [{ role: "user", content: "{{prompt}}" }],
+    },
+    null,
+    2,
+  ),
+  txt2txt_job_id_path: "choices[0].message.content",
+  txt2txt_status_endpoint: "",
+  txt2txt_status_method: "GET",
+  txt2txt_state_path: "",
+  txt2txt_success_state: "",
+  txt2txt_failed_state: "",
+  txt2txt_result_path: "choices[0].message.content",
+
+  txt2img_enabled: true,
+  txt2img_base_url: "https://api.x.ai",
+  txt2img_api_key: "",
+  txt2img_auth_type: "bearer",
+  txt2img_auth_header_key: "Authorization",
+  txt2img_auth_header_prefix: "Bearer",
+  txt2img_create_endpoint: "/v1/images/generations",
+  txt2img_create_method: "POST",
+  txt2img_create_payload: JSON.stringify(
+    {
+      model: "grok-imagine-image",
+      prompt: "{{prompt}}",
+      aspect_ratio: "9:16",
+      n: 1,
+    },
+    null,
+    2,
+  ),
+  txt2img_job_id_path: "data[0].url",
+  txt2img_status_endpoint: "",
+  txt2img_status_method: "GET",
+  txt2img_state_path: "",
+  txt2img_success_state: "",
+  txt2img_failed_state: "",
+  txt2img_result_path: "data[0].url",
+
+  img2img_enabled: true,
+  img2img_base_url: "https://api.x.ai",
+  img2img_api_key: "",
+  img2img_auth_type: "bearer",
+  img2img_auth_header_key: "Authorization",
+  img2img_auth_header_prefix: "Bearer",
+  img2img_create_endpoint: "/v1/images/edits",
+  img2img_create_method: "POST",
+  img2img_create_payload: JSON.stringify(
+    {
+      model: "grok-imagine-image",
+      prompt: "{{prompt}}",
+      image: { url: "{{reference_url}}", type: "image_url" },
+      n: 1,
+    },
+    null,
+    2,
+  ),
+  img2img_job_id_path: "data[0].url",
+  img2img_status_endpoint: "",
+  img2img_status_method: "GET",
+  img2img_state_path: "",
+  img2img_success_state: "",
+  img2img_failed_state: "",
+  img2img_result_path: "data[0].url",
+
+  reel_enabled: true,
+  reel_base_url: "https://api.x.ai",
+  reel_api_key: "",
+  reel_auth_type: "bearer",
+  reel_auth_header_key: "Authorization",
+  reel_auth_header_prefix: "Bearer",
+  reel_create_endpoint: "/v1/videos/generations",
+  reel_create_method: "POST",
+  reel_create_payload: JSON.stringify(
+    {
+      model: "grok-imagine-video",
+      prompt:
+        "The character is performing the action from the reference video, natural cinematic motion",
+      image: { url: "{{character_image_url}}" },
+      duration: 8,
+      aspect_ratio: "9:16",
+      resolution: "720p",
+    },
+    null,
+    2,
+  ),
+  reel_job_id_path: "request_id",
+  reel_status_endpoint: "/v1/videos/{{taskId}}",
   reel_status_method: "GET",
   reel_state_path: "status",
   reel_success_state: "done",
   reel_failed_state: "failed",
-  reel_result_path: "resultUrl",
+  reel_result_path: "video.url",
 
-  // ── PRODUCT SHOWCASE ──
   showcase_enabled: true,
-  showcase_base_url: "https://usevelix.com",
+  showcase_base_url: "https://api.x.ai",
   showcase_api_key: "",
   showcase_auth_type: "bearer",
   showcase_auth_header_key: "Authorization",
   showcase_auth_header_prefix: "Bearer",
-  showcase_create_endpoint: "/api/v1/generate/first-last-frame-video",
+  showcase_create_endpoint: "/v1/videos/generations",
   showcase_create_method: "POST",
   showcase_create_payload: JSON.stringify(
     {
-      firstFrameUrl: "{{image_url_1}}",
-      lastFrameUrl: "{{image_url_2}}",
+      model: "grok-imagine-video",
       prompt: "{{text}}",
+      image: { url: "{{image_url_1}}" },
+      duration: 8,
+      aspect_ratio: "{{aspect_ratio}}",
+      resolution: "720p",
     },
     null,
     2,
   ),
-  showcase_job_id_path: "jobId",
-  showcase_status_endpoint: "/api/v1/jobs/{{taskId}}",
+  showcase_job_id_path: "request_id",
+  showcase_status_endpoint: "/v1/videos/{{taskId}}",
   showcase_status_method: "GET",
   showcase_state_path: "status",
   showcase_success_state: "done",
   showcase_failed_state: "failed",
-  showcase_result_path: "resultUrl",
+  showcase_result_path: "video.url",
 
-  // ── TALKING VIDEO ──
   talking_enabled: true,
-  talking_base_url: "https://usevelix.com",
+  talking_base_url: "https://api.x.ai",
   talking_api_key: "",
   talking_auth_type: "bearer",
   talking_auth_header_key: "Authorization",
   talking_auth_header_prefix: "Bearer",
-  talking_create_endpoint: "/api/v1/generate/talking-video",
+  talking_create_endpoint: "/v1/videos/generations",
   talking_create_method: "POST",
   talking_create_payload: JSON.stringify(
     {
-      imageUrl: "{{imageUrl}}",
-      text: "{{text}}",
-      voice: "{{voice}}",
-      lang: "{{lang}}",
-      gender: "{{gender}}",
-      voiceStyle: "{{voiceStyle}}",
-      projectStyle: "{{projectStyle}}",
-      aspectRatio: "{{aspectRatio}}",
-      characterStyle: "{{characterStyle}}",
+      model: "grok-imagine-video",
+      prompt:
+        'The person in the image talks directly to the camera and says: "{{text}}". Natural lip movement, clear speech, realistic talking-head, {{aspectRatio}} framing.',
+      image: { url: "{{imageUrl}}" },
+      duration: 5,
+      aspect_ratio: "{{aspectRatio}}",
+      resolution: "720p",
     },
     null,
     2,
   ),
-  talking_job_id_path: "jobId",
-  talking_status_endpoint: "/api/v1/jobs/{{taskId}}",
+  talking_job_id_path: "request_id",
+  talking_status_endpoint: "/v1/videos/{{taskId}}",
   talking_status_method: "GET",
   talking_state_path: "status",
   talking_success_state: "done",
   talking_failed_state: "failed",
-  talking_result_path: "resultUrl",
+  talking_result_path: "video.url",
 };
 
-// ── KIE PREFILL ──────────────────────────────────────────────────────────────
-const KIE_PREFILL = {
+// ── D-ID — fast lip-sync / talking-head (photo + TTS), ~seconds ─────────────
+const DID_PREFILL = {
   ...defaultForm,
-  name: "Kie.ai",
-  provider_key: "kie_ai",
-  is_default: true,
+  name: "D-ID Lip Sync",
+  provider_key: "d_id",
+  is_default: false,
 
-  // ── TEXT TO IMAGE ──
-  txt2img_enabled: true,
-  txt2img_base_url: "https://api.kie.ai",
-  txt2img_api_key: "",
-  txt2img_auth_type: "bearer",
-  txt2img_auth_header_key: "Authorization",
-  txt2img_auth_header_prefix: "Bearer",
-  txt2img_create_endpoint: "/api/v1/jobs/createTask",
-  txt2img_create_method: "POST",
-  txt2img_create_payload: JSON.stringify(
-    {
-      model: "flux-2/pro-text-to-image",
-      input: { prompt: "{{prompt}}", aspect_ratio: "9:16", resolution: "1K" },
-    },
-    null,
-    2,
-  ),
-  txt2img_job_id_path: "data.taskId",
-  txt2img_status_endpoint: "/api/v1/jobs/recordInfo?taskId={{taskId}}",
-  txt2img_status_method: "GET",
-  txt2img_state_path: "data.state",
-  txt2img_success_state: "success",
-  txt2img_failed_state: "fail",
-  txt2img_result_path: "data.resultJson.resultUrls[0]",
+  txt2txt_enabled: false,
+  txt2img_enabled: false,
+  img2img_enabled: false,
+  reel_enabled: false,
+  showcase_enabled: false,
 
-  // ── IMAGE TO IMAGE ──
-  img2img_enabled: true,
-  img2img_base_url: "https://api.kie.ai",
-  img2img_api_key: "",
-  img2img_auth_type: "bearer",
-  img2img_auth_header_key: "Authorization",
-  img2img_auth_header_prefix: "Bearer",
-  img2img_create_endpoint: "/api/v1/jobs/createTask",
-  img2img_create_method: "POST",
-  img2img_create_payload: JSON.stringify(
+  talking_enabled: true,
+  talking_base_url: "https://api.d-id.com",
+  talking_api_key: "",
+  talking_auth_type: "basic",
+  talking_auth_header_key: "Authorization",
+  talking_auth_header_prefix: "",
+  talking_create_endpoint: "/talks",
+  talking_create_method: "POST",
+  talking_create_payload: JSON.stringify(
     {
-      model: "flux-2/pro-image-to-image",
-      input: {
-        input_urls: ["{{reference_url}}"],
-        prompt: "{{prompt}}",
-        aspect_ratio: "9:16",
-        resolution: "1K",
+      source_url: "{{imageUrl}}",
+      script: {
+        type: "text",
+        input: "{{text}}",
+        provider: {
+          type: "microsoft",
+          voice_id: "{{voice}}",
+        },
       },
+      config: { stitch: true },
     },
     null,
     2,
   ),
-  img2img_job_id_path: "data.taskId",
-  img2img_status_endpoint: "/api/v1/jobs/recordInfo?taskId={{taskId}}",
-  img2img_status_method: "GET",
-  img2img_state_path: "data.state",
-  img2img_success_state: "success",
-  img2img_failed_state: "fail",
-  img2img_result_path: "data.resultJson.resultUrls[0]",
-
-  // ── REEL ──
-  reel_enabled: true,
-  reel_base_url: "https://api.kie.ai",
-  reel_api_key: "",
-  reel_auth_type: "bearer",
-  reel_auth_header_key: "Authorization",
-  reel_auth_header_prefix: "Bearer",
-  reel_create_endpoint: "/api/v1/jobs/createTask",
-  reel_create_method: "POST",
-  reel_create_payload: JSON.stringify(
-    {
-      model: "kling-2.6/motion-control",
-      input: {
-        prompt:
-          "The character is performing the action from the reference video",
-        input_urls: ["{{character_image_url}}"],
-        video_urls: ["{{reference_video_url}}"],
-        character_orientation: "video",
-        mode: "720p",
-      },
-    },
-    null,
-    2,
-  ),
-  reel_job_id_path: "data.taskId",
-  reel_status_endpoint: "/api/v1/jobs/recordInfo?taskId={{taskId}}",
-  reel_status_method: "GET",
-  reel_state_path: "data.state",
-  reel_success_state: "success",
-  reel_failed_state: "fail",
-  reel_result_path: "data.resultJson.resultUrls[0]",
-
-  // ── PRODUCT SHOWCASE (veo) ──
-  showcase_enabled: true,
-  showcase_base_url: "https://api.kie.ai",
-  showcase_api_key: "",
-  showcase_auth_type: "bearer",
-  showcase_auth_header_key: "Authorization",
-  showcase_auth_header_prefix: "Bearer",
-  showcase_auth_body_key: "",
-  showcase_auth_query_key: "",
-  showcase_create_endpoint: "/api/v1/veo/generate",
-  showcase_create_method: "POST",
-  showcase_create_payload: JSON.stringify(
-    {
-      prompt: "{{text}}",
-      imageUrls: ["{{image_url_1}}", "{{image_url_2}}"],
-      model: "veo3_fast",
-      generationType: "{{generation_type}}",
-      aspect_ratio: "{{aspect_ratio}}",
-      enableTranslation: true,
-    },
-    null,
-    2,
-  ),
-  showcase_job_id_path: "data.taskId",
-  showcase_status_endpoint: "/api/v1/veo/record-info?taskId={{taskId}}",
-  showcase_status_method: "GET",
-  showcase_state_path: "data.successFlag",
-  showcase_success_state: "1",
-  showcase_failed_state: "0",
-  // supports both plain path AND JSON.stringify() syntax:
-  showcase_result_path: "data.response.resultUrls[0]",
+  talking_job_id_path: "id",
+  talking_status_endpoint: "/talks/{{taskId}}",
+  talking_status_method: "GET",
+  talking_state_path: "status",
+  talking_success_state: "done",
+  talking_failed_state: "error,rejected",
+  talking_result_path: "result_url",
 };
 
-// ─────────────────────────────────────────
-// SECTION WRAPPER
-// ─────────────────────────────────────────
+
 const SectionCard = ({ icon: Icon, title, children }) => {
   const theme = useTheme();
   return (
@@ -400,7 +587,7 @@ const SectionCard = ({ icon: Icon, title, children }) => {
 // ─────────────────────────────────────────
 // PER-FEATURE AUTH MINI SECTION
 // ─────────────────────────────────────────
-const FeatureAuth = ({ featKey, form, set, lang }) => {
+const FeatureAuth = ({ featKey, form, set, lang, editMode = false }) => {
   const theme = useTheme();
   const authType = form[`${featKey}_auth_type`] || "bearer";
   const prefix = form[`${featKey}_auth_header_prefix`] || "";
@@ -413,7 +600,7 @@ const FeatureAuth = ({ featKey, form, set, lang }) => {
           fullWidth
           size="small"
           label={lang?.baseUrl || "Base URL"}
-          placeholder="https://api.kie.ai"
+          placeholder="https://generativelanguage.googleapis.com"
           value={form[`${featKey}_base_url`] || ""}
           onChange={(e) => set(`${featKey}_base_url`, e.target.value)}
           InputProps={{
@@ -431,8 +618,19 @@ const FeatureAuth = ({ featKey, form, set, lang }) => {
           fullWidth
           size="small"
           label={lang?.apiKey || "API Key"}
+          placeholder={
+            editMode
+              ? lang?.apiKeyUpdatePlaceholder || "Paste new key to update"
+              : "YOUR_API_KEY"
+          }
           value={form[`${featKey}_api_key`] || ""}
           onChange={(e) => set(`${featKey}_api_key`, e.target.value)}
+          helperText={
+            editMode
+              ? lang?.apiKeyUpdateHint ||
+                "Leave as-is to keep current key, or paste a new one"
+              : undefined
+          }
           InputProps={{
             startAdornment: (
               <KeyOutlined
@@ -455,6 +653,9 @@ const FeatureAuth = ({ featKey, form, set, lang }) => {
             <MenuItem value="bearer">
               Bearer Token — Authorization: Bearer xxx
             </MenuItem>
+            <MenuItem value="basic">
+              Basic Auth — Authorization: Basic base64(key)
+            </MenuItem>
             <MenuItem value="custom_header">
               Custom Header — e.g. X-API-Key: xxx
             </MenuItem>
@@ -463,6 +664,9 @@ const FeatureAuth = ({ featKey, form, set, lang }) => {
             </MenuItem>
             <MenuItem value="query_param">
               Query Param — ?key=xxx in URL
+            </MenuItem>
+            <MenuItem value="none">
+              None — no API key (free public endpoints)
             </MenuItem>
           </Select>
         </FormControl>
@@ -595,7 +799,7 @@ const FeatureAuth = ({ featKey, form, set, lang }) => {
 // ─────────────────────────────────────────
 // FEATURE BLOCK
 // ─────────────────────────────────────────
-const FeatureBlock = ({ feat, form, set, lang }) => {
+const FeatureBlock = ({ feat, form, set, lang, editMode = false }) => {
   const theme = useTheme();
   const enabledKey = `${feat.key}_enabled`;
   const isEnabled = !!form[enabledKey];
@@ -689,6 +893,7 @@ const FeatureBlock = ({ feat, form, set, lang }) => {
                 form={form}
                 set={set}
                 lang={lang}
+                editMode={editMode}
               />
             </Grid>
 
@@ -952,7 +1157,7 @@ const FeatureBlock = ({ feat, form, set, lang }) => {
                 onChange={(e) => set(`${feat.key}_result_path`, e.target.value)}
                 helperText={
                   lang?.resultPathHelper ||
-                  'Dot-path e.g. "data.response.resultUrls[0]" or "JSON.stringify(data.response).resultUrls[0]" for encoded nodes'
+                  'Dot-path e.g. "data.outputs[0]", or "@fetch(/path/{{taskId}}).images[0].url"'
                 }
               />
             </Grid>
@@ -966,7 +1171,7 @@ const FeatureBlock = ({ feat, form, set, lang }) => {
 // ─────────────────────────────────────────
 // PROVIDER CARD (mobile)
 // ─────────────────────────────────────────
-const ProviderCard = ({ p, lang, theme, onEdit, onDelete, onToggle }) => (
+const ProviderCard = ({ p, lang, theme, onEdit, onDelete, onToggle, onSwitch }) => (
   <Paper
     variant="outlined"
     sx={{
@@ -1013,6 +1218,20 @@ const ProviderCard = ({ p, lang, theme, onEdit, onDelete, onToggle }) => (
         </Box>
       </Stack>
       <Stack direction="row" gap={0.5}>
+        {!(p.is_default === 1 && p.is_active === 1) && (
+          <IconButton
+            size="small"
+            onClick={() => onSwitch(p.id)}
+            title={lang?.useThisProvider || "Use this provider"}
+            sx={{
+              color: "success.main",
+              bgcolor: alpha(theme.palette.success.main, 0.08),
+              "&:hover": { bgcolor: alpha(theme.palette.success.main, 0.16) },
+            }}
+          >
+            <CheckCircleOutline sx={{ fontSize: 16 }} />
+          </IconButton>
+        )}
         <IconButton
           size="small"
           onClick={() => onEdit(p)}
@@ -1186,6 +1405,8 @@ const AiProviders = ({ lang }) => {
 
     setLoading(true);
     const payload = { ...form };
+    delete payload._bulk_api_key;
+    delete payload._id_locked;
     FEATURES.forEach((feat) => {
       const pk = `${feat.key}_create_payload`;
       if (payload[pk]) {
@@ -1249,6 +1470,28 @@ const AiProviders = ({ lang }) => {
         res.data.msg || lang?.somethingWentWrong || "Something went wrong",
       );
     fetchProviders();
+  }
+
+  async function handleSwitch(id) {
+    const res = await hitAxios({
+      path: "/api/ai/switch_provider",
+      post: true,
+      admin: true,
+      obj: { id },
+    });
+    if (res.data.success) {
+      showSnack(
+        res.data.msg ||
+          lang?.providerSwitched ||
+          "Provider switched successfully",
+        "success",
+      );
+      fetchProviders();
+    } else {
+      showSnack(
+        res.data.msg || lang?.somethingWentWrong || "Something went wrong",
+      );
+    }
   }
 
   return (
@@ -1398,6 +1641,25 @@ const AiProviders = ({ lang }) => {
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" gap={0.5}>
+                        {!(p.is_default === 1 && p.is_active === 1) && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleSwitch(p.id)}
+                            title={lang?.useThisProvider || "Use this provider"}
+                            sx={{
+                              color: "success.main",
+                              bgcolor: alpha(theme.palette.success.main, 0.08),
+                              "&:hover": {
+                                bgcolor: alpha(
+                                  theme.palette.success.main,
+                                  0.16,
+                                ),
+                              },
+                            }}
+                          >
+                            <CheckCircleOutline fontSize="small" />
+                          </IconButton>
+                        )}
                         <IconButton
                           size="small"
                           onClick={() => handleOpenDialog(p)}
@@ -1458,6 +1720,7 @@ const AiProviders = ({ lang }) => {
                   onEdit={handleOpenDialog}
                   onDelete={handleDelete}
                   onToggle={handleToggle}
+                  onSwitch={handleSwitch}
                 />
               ))}
             </Stack>
@@ -1513,87 +1776,16 @@ const AiProviders = ({ lang }) => {
                   gap={1.5}
                   alignItems="stretch"
                   mb={1.5}
+                  flexWrap="wrap"
                 >
-                  {/* Usevelix — prioritised */}
+                  {/* Google AI — one entry, models per feature */}
                   <Box
                     sx={{
-                      flex: 1,
+                      flex: "1 1 220px",
                       p: 1.5,
                       borderRadius: 1.5,
-                      border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
-                      bgcolor: alpha(theme.palette.primary.main, 0.04),
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 1,
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      alignItems="center"
-                      justifyContent="space-between"
-                    >
-                      <Typography
-                        variant="caption"
-                        fontWeight={700}
-                        color="primary.main"
-                      >
-                        Usevelix
-                      </Typography>
-                      <Chip
-                        label={lang?.recommended || "Recommended"}
-                        size="small"
-                        color="primary"
-                        sx={{ fontSize: "0.6rem", height: 18 }}
-                      />
-                    </Stack>
-                    <Typography variant="caption" color="text.secondary">
-                      {lang?.usevelixDesc ||
-                        "Text-to-Image, Image-to-Image, Reel Maker & Product showcase & Talking Video"}
-                    </Typography>
-                    <Stack
-                      direction="row"
-                      gap={1}
-                      alignItems="center"
-                      flexWrap="wrap"
-                    >
-                      <Button
-                        variant="contained"
-                        size="small"
-                        color="primary"
-                        fullWidth
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...USEVELIX_PREFILL,
-                            id: prev.id,
-                          }))
-                        }
-                        sx={{ fontWeight: 700, flex: 1 }}
-                      >
-                        ⚡ {lang?.prefillUsevelix || "Prefill Usevelix"}
-                      </Button>
-                      <Button
-                        component="a"
-                        href="https://usevelix.com/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        sx={{ whiteSpace: "nowrap", fontSize: "0.72rem" }}
-                      >
-                        {lang?.getUsevelixKey || "Get API Key ↗"}
-                      </Button>
-                    </Stack>
-                  </Box>
-
-                  {/* Kie.ai */}
-                  <Box
-                    sx={{
-                      flex: 1,
-                      p: 1.5,
-                      borderRadius: 1.5,
-                      border: `1px solid ${alpha(theme.palette.warning.main, 0.35)}`,
-                      bgcolor: alpha(theme.palette.warning.main, 0.04),
+                      border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
+                      bgcolor: alpha(theme.palette.success.main, 0.04),
                       display: "flex",
                       flexDirection: "column",
                       gap: 1,
@@ -1602,13 +1794,13 @@ const AiProviders = ({ lang }) => {
                     <Typography
                       variant="caption"
                       fontWeight={700}
-                      color="warning.main"
+                      color="success.main"
                     >
-                      Kie.ai
+                      Google AI
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {lang?.kieDesc ||
-                        "Text-to-Image, Image-to-Image, Reel Maker & Short product showcase"}
+                      {lang?.googleDesc ||
+                        "Gemini text + Veo video. Images: enable Imagen only on paid Google, or use Grok"}
                     </Typography>
                     <Stack
                       direction="row"
@@ -1619,26 +1811,155 @@ const AiProviders = ({ lang }) => {
                       <Button
                         variant="outlined"
                         size="small"
-                        color="warning"
+                        color="success"
                         fullWidth
                         onClick={() =>
-                          setForm((prev) => ({ ...KIE_PREFILL, id: prev.id }))
+                          setForm((prev) => ({
+                            ...GOOGLE_PREFILL,
+                            id: prev.id,
+                            _id_locked: true,
+                            _bulk_api_key: prev._bulk_api_key || "",
+                          }))
                         }
                         sx={{ fontWeight: 700, flex: 1 }}
                       >
-                        {lang?.prefillKie || "Prefill Kie.ai"}
+                        {lang?.prefillGoogle || "Prefill Google AI"}
                       </Button>
                       <Button
                         component="a"
-                        href="https://kie.ai?ref=b1ffffca8ec596f4f351df51d5f14cde"
+                        href="https://aistudio.google.com/apikey"
                         target="_blank"
                         rel="noopener noreferrer"
                         size="small"
                         variant="outlined"
-                        color="warning"
+                        color="success"
                         sx={{ whiteSpace: "nowrap", fontSize: "0.72rem" }}
                       >
-                        {lang?.getKieKey || "Get API Key ↗"}
+                        {lang?.getGoogleKey || "Get API Key ↗"}
+                      </Button>
+                    </Stack>
+                  </Box>
+
+                  {/* xAI Grok */}
+                  <Box
+                    sx={{
+                      flex: "1 1 220px",
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      border: `1px solid ${alpha(theme.palette.secondary.main, 0.35)}`,
+                      bgcolor: alpha(theme.palette.secondary.main, 0.04),
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      fontWeight={700}
+                      color="secondary.main"
+                    >
+                      xAI Grok
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {lang?.xaiDesc ||
+                        "Full stack — text, images, reel, showcase, talking (alternate to Google)"}
+                    </Typography>
+                    <Stack
+                      direction="row"
+                      gap={1}
+                      alignItems="center"
+                      flexWrap="wrap"
+                    >
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        color="secondary"
+                        fullWidth
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...XAI_PREFILL,
+                            id: prev.id,
+                            _id_locked: true,
+                            _bulk_api_key: prev._bulk_api_key || "",
+                          }))
+                        }
+                        sx={{ fontWeight: 700, flex: 1 }}
+                      >
+                        {lang?.prefillXai || "Prefill xAI Grok"}
+                      </Button>
+                      <Button
+                        component="a"
+                        href="https://console.x.ai/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        sx={{ whiteSpace: "nowrap", fontSize: "0.72rem" }}
+                      >
+                        {lang?.getXaiKey || "Get API Key ↗"}
+                      </Button>
+                    </Stack>
+                  </Box>
+
+                  {/* D-ID Lip Sync */}
+                  <Box
+                    sx={{
+                      flex: "1 1 220px",
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      border: `1px solid ${alpha(theme.palette.info.main, 0.35)}`,
+                      bgcolor: alpha(theme.palette.info.main, 0.04),
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      fontWeight={700}
+                      color="info.main"
+                    >
+                      D-ID Lip Sync
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {lang?.didDesc ||
+                        "Fast talking video — photo + TTS lip-sync in seconds (not full AI video gen)"}
+                    </Typography>
+                    <Stack
+                      direction="row"
+                      gap={1}
+                      alignItems="center"
+                      flexWrap="wrap"
+                    >
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        color="info"
+                        fullWidth
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...DID_PREFILL,
+                            id: prev.id,
+                            _id_locked: true,
+                            _bulk_api_key: prev._bulk_api_key || "",
+                          }))
+                        }
+                        sx={{ fontWeight: 700, flex: 1 }}
+                      >
+                        {lang?.prefillDid || "Prefill D-ID"}
+                      </Button>
+                      <Button
+                        component="a"
+                        href="https://studio.d-id.com/account-settings"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="small"
+                        variant="outlined"
+                        color="info"
+                        sx={{ whiteSpace: "nowrap", fontSize: "0.72rem" }}
+                      >
+                        {lang?.getDidKey || "Get API Key ↗"}
                       </Button>
                     </Stack>
                   </Box>
@@ -1647,7 +1968,7 @@ const AiProviders = ({ lang }) => {
                 <Typography variant="caption" color="text.disabled">
                   💡{" "}
                   {lang?.prefillNote ||
-                    "All fields are pre-configured — just enter your API key in each feature section."}
+                    "For fast Talking Video, enable D-ID Lip Sync (paste username:password key). Grok/Veo are slower full video gens."}
                 </Typography>
               </Box>
             </Grid>
@@ -1665,31 +1986,71 @@ const AiProviders = ({ lang }) => {
                     fullWidth
                     size="small"
                     label={lang?.providerName || "Provider Name"}
-                    placeholder="Kie.ai"
+                    placeholder="Google AI"
                     value={form.name}
-                    onChange={(e) => set("name", e.target.value)}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setForm((prev) => {
+                        const next = { ...prev, name };
+                        // Auto-fill Internal ID from name only when adding & not from prefill lock
+                        if (!state.editMode && !prev._id_locked) {
+                          next.provider_key = name
+                            .toLowerCase()
+                            .trim()
+                            .replace(/[^a-z0-9]+/g, "_")
+                            .replace(/^_+|_+$/g, "")
+                            .slice(0, 40);
+                        }
+                        return next;
+                      });
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
                     size="small"
-                    label={lang?.providerKey || "Provider Key"}
-                    placeholder="kie_ai"
+                    label={
+                      lang?.providerKey || "Internal ID (not your API key)"
+                    }
+                    placeholder="google"
                     value={form.provider_key}
                     disabled={state.editMode}
                     helperText={
                       state.editMode
                         ? lang?.cannotChangeKey ||
-                          "Cannot change after creation"
-                        : ""
+                          "Fixed after creation — this is only a database ID"
+                        : lang?.providerKeyHint ||
+                          "Auto-filled short ID for the database (e.g. google). Your secret API key goes in Update API Keys / feature fields — never here."
                     }
-                    onChange={(e) =>
-                      set(
-                        "provider_key",
-                        e.target.value.toLowerCase().replace(/\s+/g, "_"),
-                      )
-                    }
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      // Looks like a secret API key pasted in the wrong field → move it
+                      if (
+                        raw.length > 24 ||
+                        /^(xai-|sk-|AIza|Bearer\s)/i.test(raw)
+                      ) {
+                        setForm((prev) => ({
+                          ...prev,
+                          _bulk_api_key: raw,
+                          _id_locked: true,
+                        }));
+                        showSnack(
+                          lang?.apiKeyWrongField ||
+                            "Moved to API Key field. Internal ID stays a short slug (use Prefill Google / Gemini).",
+                          "info",
+                        );
+                        return;
+                      }
+                      setForm((prev) => ({
+                        ...prev,
+                        _id_locked: true,
+                        provider_key: raw
+                          .toLowerCase()
+                          .replace(/[^a-z0-9_]+/g, "_")
+                          .replace(/^_+|_+$/g, ""),
+                      }));
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12}>
@@ -1709,6 +2070,81 @@ const AiProviders = ({ lang }) => {
                   />
                 </Grid>
               </Grid>
+            </SectionCard>
+          </Grid>
+
+          {/* API KEYS — add + edit */}
+          <Grid item xs={12}>
+            <SectionCard
+              icon={KeyOutlined}
+              title={
+                state.editMode
+                  ? lang?.updateApiKeys || "Update API Keys"
+                  : lang?.setApiKeys || "Set API Key (secret)"
+              }
+            >
+              <Alert
+                severity="warning"
+                variant="outlined"
+                sx={{ mb: 2, borderRadius: 1.5 }}
+              >
+                {state.editMode
+                  ? lang?.updateApiKeysHint ||
+                    "Paste your secret API key here (xai-… / AIza…), Apply to enabled, then Update. Leave empty to keep the current key. Never put this in Internal ID."
+                  : lang?.setApiKeysHint ||
+                    "Paste your secret API key here once → Apply to enabled. Internal ID above is only a short slug (xai_grok) — not this secret."}
+              </Alert>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.5}
+                alignItems={{ sm: "flex-start" }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label={lang?.newApiKey || "API Key (secret)"}
+                  placeholder="xai-... / AIza... / sk-..."
+                  value={form._bulk_api_key || ""}
+                  onChange={(e) => set("_bulk_api_key", e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <KeyOutlined
+                        fontSize="small"
+                        sx={{ mr: 1, color: "text.disabled" }}
+                      />
+                    ),
+                  }}
+                />
+                <Button
+                  variant="contained"
+                  color="primary"
+                  sx={{ whiteSpace: "nowrap", minWidth: 180, height: 40 }}
+                  disabled={!String(form._bulk_api_key || "").trim()}
+                  onClick={() => {
+                    const key = String(form._bulk_api_key || "").trim();
+                    if (!key) return;
+                    setForm((prev) => {
+                      const next = { ...prev, _bulk_api_key: "" };
+                      FEATURES.forEach((feat) => {
+                        if (prev[`${feat.key}_enabled`]) {
+                          next[`${feat.key}_api_key`] = key;
+                        }
+                      });
+                      return next;
+                    });
+                    showSnack(
+                      state.editMode
+                        ? lang?.apiKeysApplied ||
+                            "API key applied to all enabled features — click Update to save"
+                        : lang?.apiKeysAppliedAdd ||
+                            "API key applied to all enabled features — click Add to save",
+                      "success",
+                    );
+                  }}
+                >
+                  {lang?.applyToEnabled || "Apply to enabled"}
+                </Button>
+              </Stack>
             </SectionCard>
           </Grid>
 
@@ -1734,6 +2170,7 @@ const AiProviders = ({ lang }) => {
                     form={form}
                     set={set}
                     lang={lang}
+                    editMode={state.editMode}
                   />
                 ))}
               </Box>

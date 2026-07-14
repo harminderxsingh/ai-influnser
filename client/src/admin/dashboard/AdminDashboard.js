@@ -20,8 +20,7 @@ import {
 } from "@mui/icons-material";
 import { GlobalContext } from "../../context/GlobalContext";
 import { useMenuItems } from "./useMenuItems";
-
-const drawerWidth = 260;
+import { usePanelChrome } from "../../utils/usePanelChrome";
 
 const AdminDashboard = () => {
   const { lang } = React.useContext(TranslateContext);
@@ -29,6 +28,8 @@ const AdminDashboard = () => {
   const { hitAxios } = React.useContext(GlobalContext);
   const theme = useTheme();
   const { toggleColorMode, isDark } = useCustomTheme();
+  const chrome = usePanelChrome(260);
+  const drawerWidth = chrome.drawerWidth;
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const menuItems = useMenuItems();
 
@@ -123,6 +124,7 @@ const AdminDashboard = () => {
         display: "flex",
         minHeight: "100vh",
         backgroundColor: theme.palette.background.default,
+        ...chrome.shellSx,
       }}
     >
       <Sidebar
@@ -145,6 +147,7 @@ const AdminDashboard = () => {
           flexGrow: 1,
           width: { xs: "100%", md: `calc(100% - ${drawerWidth}px)` },
           mt: { xs: 7, md: 0 },
+          ...chrome.mainSx,
         }}
       >
         <TopBar
@@ -158,7 +161,7 @@ const AdminDashboard = () => {
           web={web}
         />
 
-        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+        <Box sx={{ p: { xs: 2, sm: 3 }, ...chrome.contentSx }}>
           <Content selectedMenu={selectedMenu} web={web} />
         </Box>
       </Box>

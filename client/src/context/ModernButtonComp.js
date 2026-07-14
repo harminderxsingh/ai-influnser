@@ -18,30 +18,39 @@ const ModernButtonComp = ({
   const { themeConfig, mode } = useThemeData();
 
   const getGradientStyle = () => {
-    if (variant === "gradient") {
-      return {
-        background: themeConfig.gradient_primary,
-        color: "#FFFFFF",
-        border: "none",
-        "&:hover": {
-          background: themeConfig.gradient_primary,
-          opacity: 0.9,
-          transform: "translateY(-2px)",
-          boxShadow: `${themeConfig.button_shadow_hover}, ${themeConfig.ai_glow}`,
-        },
-        "&:disabled": {
-          background:
-            mode === "light"
-              ? themeConfig.divider_light
-              : themeConfig.divider_dark,
-          color:
-            mode === "light"
-              ? themeConfig.text_disabled_light
-              : themeConfig.text_disabled_dark,
-        },
-      };
-    }
-    return {};
+    if (variant !== "gradient") return {};
+
+    const gradient =
+      mode === "light"
+        ? themeConfig.gradient_primary_light ||
+          themeConfig.gradient_primary ||
+          themeConfig.gradient_secondary
+        : themeConfig.gradient_primary_dark ||
+          themeConfig.gradient_primary ||
+          themeConfig.gradient_secondary;
+
+    return {
+      background: gradient,
+      color: "#FFFFFF",
+      border: "none",
+      "&:hover": {
+        background: gradient,
+        opacity: 0.92,
+        transform: "translateY(-2px)",
+        filter: "saturate(1.1)",
+        boxShadow: `${themeConfig.button_shadow_hover || "0 8px 24px rgba(0,0,0,0.15)"}, ${themeConfig.ai_glow || ""}`,
+      },
+      "&:disabled": {
+        background:
+          mode === "light"
+            ? themeConfig.divider_light
+            : themeConfig.divider_dark,
+        color:
+          mode === "light"
+            ? themeConfig.text_disabled_light
+            : themeConfig.text_disabled_dark,
+      },
+    };
   };
 
   const getSizeStyles = () => {

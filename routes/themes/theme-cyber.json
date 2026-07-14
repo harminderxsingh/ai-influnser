@@ -67,9 +67,18 @@
       "color_light": "#00FF41",
       "color_dark": "#00FF41"
     },
-    "small": { "padding": "4px 12px", "fontSize": "0.6875rem" },
-    "medium": { "padding": "7px 18px", "fontSize": "0.75rem" },
-    "large": { "padding": "10px 24px", "fontSize": "0.875rem" }
+    "small": {
+      "padding": "4px 12px",
+      "fontSize": "0.6875rem"
+    },
+    "medium": {
+      "padding": "7px 18px",
+      "fontSize": "0.75rem"
+    },
+    "large": {
+      "padding": "10px 24px",
+      "fontSize": "0.875rem"
+    }
   },
   "card": {
     "borderRadius": 2,
@@ -82,7 +91,11 @@
     "borderColor_light": "rgba(0, 255, 65, 0.3)",
     "borderColor_dark": "rgba(0, 255, 65, 0.25)"
   },
-  "box": { "defaultBorderRadius": 2, "defaultPadding": 14, "defaultMargin": 0 },
+  "box": {
+    "defaultBorderRadius": 2,
+    "defaultPadding": 14,
+    "defaultMargin": 0
+  },
   "paper": {
     "borderRadius": 2,
     "elevation0": "none",
@@ -126,12 +139,22 @@
     "backdropOpacity": 0.85
   },
   "appBar": {
-    "height": 48,
+    "height": 88,
     "padding": "0 20px",
     "boxShadow": "0 1px 0 rgba(0,255,65,0.2), 0 0 20px rgba(0,255,65,0.05)",
     "backgroundColor_light": "rgba(0, 0, 0, 0.95)",
     "backgroundColor_dark": "rgba(0, 0, 0, 0.98)",
-    "borderBottom": "1px solid rgba(0, 255, 65, 0.25)"
+    "borderBottom": "1px solid rgba(0, 255, 65, 0.25)",
+    "logoHeightXs": 56,
+    "logoHeightSm": 64,
+    "logoHeightMd": 72,
+    "logoMaxWidthXs": 200,
+    "logoMaxWidthSm": 240,
+    "logoMaxWidthMd": 280,
+    "logoMinWidthXs": 120,
+    "logoMinWidthMd": 140,
+    "footerLogoHeight": 80,
+    "footerLogoMaxWidth": 280
   },
   "drawer": {
     "width": 220,
@@ -309,12 +332,13 @@
   "spacing_unit": 6,
   "transition_duration": "0.15s",
   "transition_easing": "ease",
-  "gradient_primary_light": "linear-gradient(135deg, #00FF41 0%, #00D4FF 100%)",
-  "gradient_primary_dark": "linear-gradient(135deg, #00FF41 0%, #00D4FF 100%)",
-  "gradient_secondary": "linear-gradient(135deg, #000000 0%, #0A1A0A 50%, #001A00 100%)",
+  "gradient_primary_light": "linear-gradient(135deg, #00FF41 0%, #00D4FF 50%, #FF00E5 100%)",
+  "gradient_primary_dark": "linear-gradient(135deg, #00FF41 0%, #00D4FF 50%, #FF00E5 100%)",
+  "gradient_secondary": "linear-gradient(135deg, #00D4FF 0%, #00FF41 100%)",
   "gradient_success": "linear-gradient(135deg, #00FF41 0%, #00D4FF 100%)",
   "glass_bg_light": "rgba(0, 0, 0, 0.85)",
   "glass_bg_dark": "rgba(0, 0, 0, 0.92)",
   "glass_blur": "8px",
-  "lastUpdated": "2026-03-16T19:50:00.000Z"
+  "lastUpdated": "2026-07-11T13:52:47.864Z",
+  "gradient_primary": "linear-gradient(135deg, #00FF41 0%, #00D4FF 100%)"
 }

@@ -33,13 +33,20 @@ import {
   IconButton,
   CircularProgress,
   Alert,
+  Chip,
 } from "@mui/material";
 import React from "react";
 import CommonDialog from "../../../common/CommonDialog";
 import ModelCard from "./ModelCard";
 import PageHeader from "../../../common/PageHeader";
 
-const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
+const AddNewProduct = ({
+  lang = {},
+  inf = [],
+  hitAxios,
+  fetchContents,
+  onCreated,
+}) => {
   const createSubmissionKey = () => {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -61,6 +68,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
     promptRecommendationLoading: false,
     promptRecommendationError: "",
     promptRecommendationCredits: null,
+    visionAnalysis: null,
   });
 
   const theme = useTheme();
@@ -106,6 +114,9 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
         ...state,
         productImage: file,
         productImagePreview: URL.createObjectURL(file),
+        promptRecommendations: [],
+        visionAnalysis: null,
+        promptRecommendationError: "",
       });
     }
   };
@@ -115,6 +126,9 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
       ...state,
       productImage: null,
       productImagePreview: null,
+      promptRecommendations: [],
+      visionAnalysis: null,
+      promptRecommendationError: "",
     });
   };
 
@@ -155,12 +169,33 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
         post: true,
         admin: false,
         obj: formData,
-        isFormData: true,
+        showLoading: false,
+        showSnackbar: true,
       });
 
-      if (res.data.success) {
-        await fetchContents();
+      if (res?.data?.success) {
+        const created = res.data.data || {
+          id: res.data.id,
+          status: res.data.status || "processing",
+          job_id: res.data.job_id || null,
+          ref_photo: null,
+          prompt: state.prompt,
+          generated_video: null,
+        };
+
+        if (typeof onCreated === "function" && created.id) {
+          onCreated({
+            ...created,
+            status: created.status || "processing",
+            prompt: created.prompt || state.prompt,
+            created_at: created.created_at || new Date().toISOString(),
+            updated_at: created.updated_at || new Date().toISOString(),
+          });
+        }
+
         handleClose();
+        // Silent refresh — no global loading overlay
+        fetchContents();
         return;
       }
     } finally {
@@ -172,10 +207,21 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
   async function handleGeneratePromptRecommendations() {
     if (state.promptRecommendationLoading) return;
 
+    if (!state.productImage) {
+      setState((prev) => ({
+        ...prev,
+        promptRecommendationError:
+          lang.uploadProductFirst ||
+          "Upload a product image first so we can detect the product type and suggest prompts.",
+      }));
+      return;
+    }
+
     setState((prev) => ({
       ...prev,
       promptRecommendationLoading: true,
       promptRecommendationError: "",
+      visionAnalysis: null,
     }));
 
     try {
@@ -195,17 +241,16 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
         state.influencerMode === "select" ? state.selectedModel?.id || "" : "",
       );
       formData.append("context", JSON.stringify(context));
-      if (state.productImage) {
-        formData.append("product_image", state.productImage);
-      }
+      formData.append("product_image", state.productImage);
 
       const res = await hitAxios({
         path: "/api/prompt-recommendation/generate",
         post: true,
         admin: false,
         obj: formData,
-        isFormData: true,
         showLoading: false,
+        showSnackbar: false,
+        timeout: 120000,
       });
 
       if (res?.data?.success) {
@@ -213,12 +258,15 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
           ...prev,
           promptRecommendations: res.data.prompts || [],
           promptRecommendationCredits: res.data.credits,
+          visionAnalysis: res.data.visionAnalysis || null,
         }));
       } else {
         setState((prev) => ({
           ...prev,
           promptRecommendationError:
-            res?.data?.msg || "Could not generate prompt ideas",
+            res?.data?.err ||
+            res?.data?.msg ||
+            "Could not generate prompt ideas",
         }));
       }
     } catch (err) {
@@ -248,6 +296,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
       promptRecommendationLoading: false,
       promptRecommendationError: "",
       promptRecommendationCredits: null,
+      visionAnalysis: null,
     });
   };
 
@@ -700,7 +749,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       {lang.recommendedPromptsDesc ||
-                        "Generate ready-to-use prompt ideas for this product showcase."}
+                        "AI looks at your product photo, detects the product type, then suggests matching ad prompts."}
                     </Typography>
                   </Box>
                   <Button
@@ -713,12 +762,14 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                         <AutoAwesomeOutlined />
                       )
                     }
-                    disabled={state.promptRecommendationLoading}
+                    disabled={
+                      state.promptRecommendationLoading || !state.productImage
+                    }
                     onClick={handleGeneratePromptRecommendations}
                     sx={{ textTransform: "none", fontWeight: 700 }}
                   >
                     {state.promptRecommendationLoading
-                      ? lang.generating || "Generating..."
+                      ? lang.analyzingProduct || "Analyzing product..."
                       : lang.generateIdeas || "Generate Ideas"}
                   </Button>
                 </Stack>
@@ -727,6 +778,68 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                   <Alert severity="error" sx={{ mt: 2 }}>
                     {state.promptRecommendationError}
                   </Alert>
+                )}
+
+                {state.visionAnalysis && (
+                  <Box
+                    sx={{
+                      mt: 2,
+                      p: 1.5,
+                      borderRadius: 2,
+                      bgcolor: alpha(theme.palette.info.main, 0.06),
+                      border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      flexWrap="wrap"
+                      useFlexGap
+                      sx={{ mb: 1 }}
+                    >
+                      {state.visionAnalysis.product_type && (
+                        <Chip
+                          size="small"
+                          color="info"
+                          label={state.visionAnalysis.product_type}
+                        />
+                      )}
+                      {state.visionAnalysis.product_name && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={state.visionAnalysis.product_name}
+                        />
+                      )}
+                    </Stack>
+                    {state.visionAnalysis.product_description && (
+                      <Typography variant="body2" color="text.secondary">
+                        {state.visionAnalysis.product_description}
+                      </Typography>
+                    )}
+                    {state.visionAnalysis.target_audience && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                        sx={{ mt: 0.75 }}
+                      >
+                        {lang.targetAudience || "Audience"}:{" "}
+                        {state.visionAnalysis.target_audience}
+                      </Typography>
+                    )}
+                    {!!state.visionAnalysis.key_benefits?.length && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                        sx={{ mt: 0.5 }}
+                      >
+                        {lang.benefits || "Benefits"}:{" "}
+                        {state.visionAnalysis.key_benefits.join(", ")}
+                      </Typography>
+                    )}
+                  </Box>
                 )}
 
                 {state.promptRecommendations.length > 0 && (
@@ -981,6 +1094,7 @@ const AddNewProduct = ({ lang = {}, inf = [], hitAxios, fetchContents }) => {
                 </Button>
               ) : (
                 <Button
+                  type="button"
                   onClick={handleConfirm}
                   variant="contained"
                   color="success"

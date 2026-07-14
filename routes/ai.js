@@ -2,7 +2,7 @@ const router = require("express").Router();
 const { query } = require("../database/connection.js");
 const adminValidator = require("../middlewares/admin.js");
 
-const FEATURES = ["txt2img", "img2img", "reel", "showcase", "talking"];
+const FEATURES = ["txt2img", "img2img", "reel", "showcase", "talking", "txt2txt"];
 const API_KEY_PLACEHOLDERS = new Set(["", "YOUR_API_KEY", "YOUR_VSK_KEY"]);
 
 function cleanString(value) {
@@ -13,18 +13,7 @@ function isMissingApiKey(value) {
   return API_KEY_PLACEHOLDERS.has(String(value || "").trim());
 }
 
-function isKieProvider(body, feature) {
-  const name = String(body.name || "").toLowerCase();
-  const baseUrl = String(body[`${feature}_base_url`] || "").toLowerCase();
-
-  return name.includes("kie") || baseUrl.includes("api.kie.ai");
-}
-
-function hasProviderKeyFallback(body, feature) {
-  return isKieProvider(body, feature) && !isMissingApiKey(body.provider_key);
-}
-
-function validateEnabledFeatures(body) {
+function validateEnabledFeatures(body, { forUpdate = false, existing = null } = {}) {
   for (const f of FEATURES) {
     if (!body[`${f}_enabled`]) continue;
 
@@ -32,11 +21,16 @@ function validateEnabledFeatures(body) {
       return `${f} Base URL is required`;
     }
 
-    if (
-      isMissingApiKey(body[`${f}_api_key`]) &&
-      !hasProviderKeyFallback(body, f)
-    ) {
-      return `${f} API Key is required`;
+    if (isMissingApiKey(body[`${f}_api_key`])) {
+      const authType = cleanString(body[`${f}_auth_type`]) || "bearer";
+      // No-auth providers (e.g. Pollinations free image)
+      if (authType !== "none" && authType !== "no_auth") {
+        // On update, empty key means "keep existing" — only fail if DB also has none
+        const existingKey = existing?.[`${f}_api_key`];
+        if (!(forUpdate && !isMissingApiKey(existingKey))) {
+          return `${f} API Key is required`;
+        }
+      }
     }
 
     if (!cleanString(body[`${f}_create_endpoint`])) {
@@ -85,6 +79,14 @@ function buildFeatureFields(body, forUpdate = false) {
     ];
 
     fields.forEach(([col, val]) => {
+      // On update, skip empty API keys so existing secrets are preserved
+      if (
+        forUpdate &&
+        col === `${f}_api_key` &&
+        isMissingApiKey(body[`${f}_api_key`])
+      ) {
+        return;
+      }
       forUpdate ? cols.push(`${col} = ?`) : cols.push(col);
       vals.push(val);
     });
@@ -142,9 +144,15 @@ router.post("/add_provider", adminValidator, async (req, res) => {
     }
 
     if (!/^[a-z0-9_]+$/.test(provider_key)) {
+      const looksLikeApiKey =
+        provider_key.length > 24 ||
+        /^(xai-|sk-|AIza|Bearer\s)/i.test(provider_key);
+
       return res.json({
         success: false,
-        msg: "Provider Key must be lowercase letters, numbers and underscores only",
+        msg: looksLikeApiKey
+          ? "That looks like an API key. Provider Key is only a short ID (e.g. xai_grok). Paste your API key in each feature's API Key field below."
+          : "Provider Key must be lowercase letters, numbers and underscores only (e.g. xai_grok)",
       });
     }
 
@@ -199,16 +207,19 @@ router.post("/update_provider", adminValidator, async (req, res) => {
     if (!name?.trim())
       return res.json({ success: false, msg: "Provider Name is required" });
 
-    const validationError = validateEnabledFeatures(req.body);
-    if (validationError) {
-      return res.json({ success: false, msg: validationError });
-    }
-
-    const existing = await query(`SELECT id FROM ai_providers WHERE id = ?`, [
+    const existing = await query(`SELECT * FROM ai_providers WHERE id = ?`, [
       id,
     ]);
     if (!existing.length)
       return res.json({ success: false, msg: "Provider not found" });
+
+    const validationError = validateEnabledFeatures(req.body, {
+      forUpdate: true,
+      existing: existing[0],
+    });
+    if (validationError) {
+      return res.json({ success: false, msg: validationError });
+    }
 
     if (is_default) {
       await query(`UPDATE ai_providers SET is_default = 0`, []);
@@ -259,8 +270,8 @@ router.post("/delete_provider", adminValidator, async (req, res) => {
 
     const providerKey = existing[0]?.provider_key;
 
-    // protected providers
-    if (providerKey === "kie_ai" || providerKey === "usevelix") {
+    // protected seeded providers
+    if (providerKey === "google" || providerKey === "xai_grok") {
       return res.json({
         success: false,
         msg: "This provider cannot be deleted",
@@ -290,17 +301,62 @@ router.post("/toggle_provider", adminValidator, async (req, res) => {
     if (!id)
       return res.json({ success: false, msg: "Provider ID is required" });
 
-    const existing = await query(`SELECT id FROM ai_providers WHERE id = ?`, [
+    const existing = await query(
+      `SELECT id, name FROM ai_providers WHERE id = ?`,
+      [id],
+    );
+    if (!existing.length)
+      return res.json({ success: false, msg: "Provider not found" });
+
+    if (is_active) {
+      // Activating a provider also makes it the default so jobs use it
+      await query(`UPDATE ai_providers SET is_default = 0`);
+      await query(
+        `UPDATE ai_providers SET is_active = 1, is_default = 1 WHERE id = ?`,
+        [id],
+      );
+    } else {
+      await query(
+        `UPDATE ai_providers SET is_active = 0, is_default = 0 WHERE id = ?`,
+        [id],
+      );
+    }
+
+    res.json({
+      success: true,
+      msg: is_active
+        ? `"${existing[0].name}" is now active and default`
+        : "Status updated successfully",
+    });
+  } catch (err) {
+    console.log(err);
+    res.json({ success: false, msg: "Something went wrong" });
+  }
+});
+
+// ── SWITCH / USE THIS PROVIDER (activate + set default) ──
+router.post("/switch_provider", adminValidator, async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id)
+      return res.json({ success: false, msg: "Provider ID is required" });
+
+    const existing = await query(`SELECT id, name FROM ai_providers WHERE id = ?`, [
       id,
     ]);
     if (!existing.length)
       return res.json({ success: false, msg: "Provider not found" });
 
-    await query(`UPDATE ai_providers SET is_active = ? WHERE id = ?`, [
-      is_active ? 1 : 0,
-      id,
-    ]);
-    res.json({ success: true, msg: "Status updated successfully" });
+    await query(`UPDATE ai_providers SET is_default = 0`, []);
+    await query(
+      `UPDATE ai_providers SET is_active = 1, is_default = 1 WHERE id = ?`,
+      [id],
+    );
+
+    res.json({
+      success: true,
+      msg: `"${existing[0].name}" is now the active default provider`,
+    });
   } catch (err) {
     console.log(err);
     res.json({ success: false, msg: "Something went wrong" });

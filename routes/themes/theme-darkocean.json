@@ -139,13 +139,23 @@
     "backdropOpacity": 0.6
   },
   "appBar": {
-    "height": 56,
+    "height": 88,
     "padding": "0 20px",
     "boxShadow": "none",
     "backgroundColor_light": "rgba(255, 255, 255, 0.85)",
     "backgroundColor_dark": "rgba(0, 0, 0, 0.85)",
     "borderBottom_light": "1px solid #E5E7EB",
-    "borderBottom_dark": "1px solid #1F1F1F"
+    "borderBottom_dark": "1px solid #1F1F1F",
+    "logoHeightXs": 56,
+    "logoHeightSm": 64,
+    "logoHeightMd": 72,
+    "logoMaxWidthXs": 200,
+    "logoMaxWidthSm": 240,
+    "logoMaxWidthMd": 280,
+    "logoMinWidthXs": 120,
+    "logoMinWidthMd": 140,
+    "footerLogoHeight": 80,
+    "footerLogoMaxWidth": 280
   },
   "drawer": {
     "width": 224,
@@ -326,13 +336,14 @@
   "spacing_unit": 6,
   "transition_duration": "0.2s",
   "transition_easing": "cubic-bezier(0.4, 0, 0.2, 1)",
-  "gradient_primary_light": "linear-gradient(135deg, #15803D 0%, #16A34A 50%, #22C55E 100%)",
-  "gradient_primary_dark": "linear-gradient(135deg, #14532D 0%, #166534 50%, #15803D 100%)",
-  "gradient_secondary": "linear-gradient(135deg, #111827 0%, #1F2937 100%)",
+  "gradient_primary_light": "linear-gradient(135deg, #16A34A 0%, #0EA5E9 50%, #2563EB 100%)",
+  "gradient_primary_dark": "linear-gradient(135deg, #22C55E 0%, #38BDF8 50%, #60A5FA 100%)",
+  "gradient_secondary": "linear-gradient(135deg, #0EA5E9 0%, #16A34A 100%)",
   "gradient_success": "linear-gradient(135deg, #10B981 0%, #34D399 100%)",
   "gradient_welcome_card": "linear-gradient(135deg, #15803D 0%, #16A34A 60%, #22C55E 100%)",
   "glass_bg_light": "rgba(255, 255, 255, 0.75)",
   "glass_bg_dark": "rgba(10, 10, 10, 0.75)",
   "glass_blur": "12px",
-  "lastUpdated": "2026-03-18T17:28:00.000Z"
+  "lastUpdated": "2026-07-11T13:52:47.869Z",
+  "gradient_primary": "linear-gradient(135deg, #16A34A 0%, #0EA5E9 100%)"
 }

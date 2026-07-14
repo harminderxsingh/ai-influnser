@@ -87,6 +87,13 @@ const FooterComp = ({ web: webProp }) => {
   const currentYear = new Date().getFullYear();
   const siteName = web?.site_name || lang?.appName || "YourBrand";
   const logoUrl = web?.site_logo ? `/media/${web.site_logo}` : null;
+  const ab = config.appBar || {};
+  const n = (v, fallback) => {
+    const x = Number(v);
+    return Number.isFinite(x) && x > 0 ? x : fallback;
+  };
+  const footerLogoH = n(ab.footerLogoHeight, 80);
+  const footerLogoMaxW = n(ab.footerLogoMaxWidth, 280);
 
   return (
     <Box
@@ -125,9 +132,12 @@ const FooterComp = ({ web: webProp }) => {
                 src={logoUrl}
                 alt={siteName}
                 sx={{
-                  height: 80,
-                  maxWidth: 160,
+                  height: footerLogoH,
+                  width: "auto",
+                  maxWidth: footerLogoMaxW,
+                  minWidth: 140,
                   objectFit: "contain",
+                  objectPosition: "left center",
                   display: "block",
                   mb: 0.8,
                   filter: isDark ? "brightness(1)" : "none",

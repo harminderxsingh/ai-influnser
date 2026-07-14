@@ -2,12 +2,36 @@
 
 AI influencer / avatar platform with Node.js backend, React frontend, payments, credits, referrals, and admin panel.
 
-## Local development
+## Local development (development branch)
 
-1. Copy `.env.example` → `.env` and `client/.env.example` → `client/.env`
-2. Configure `config.json` or run `/setup`
-3. `npm install` and `npm --prefix client install`
-4. `npm start` (backend) and `npm --prefix client start` (frontend dev)
+Uses a **separate DB + ports** so production `config.json` / live DB stay untouched.
+
+| | Development | Production |
+|--|--|--|
+| Config | `config.development.json` | `config.json` |
+| Database | `ai_influncer_dev` | `ai_influncer` |
+| API | http://localhost:8002 | http://localhost:8001 |
+| Frontend (CRA) | http://localhost:3000 | built into `client/public` |
+
+1. Create the dev database (once):
+
+```bash
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS ai_influncer_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+2. Install deps: `npm install` and `npm --prefix client install`
+
+3. Run both servers:
+
+```bash
+npm run dev
+```
+
+- Backend loads `.env.development` + `config.development.json`
+- CRA loads `client/.env.development` → API at `:8002`
+- Open **http://localhost:3000** (hot reload, no build)
+
+Or separately: `npm run start:dev` and `npm run client:dev`.
 
 ## Production build (local only, then git push)
 

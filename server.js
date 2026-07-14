@@ -6,6 +6,7 @@ const path = require("path");
 const fileUpload = require("express-fileupload");
 const { mainLoop } = require("./loops/mainLoop");
 const { autoPostInit } = require("./loops/autoPost");
+const { loadAppConfig, resolveConfigPath } = require("./utils/loadConfig");
 
 const app = express();
 
@@ -16,22 +17,12 @@ app.use(fileUpload());
 
 // Check if database is configured
 function isDatabaseConfigured() {
-  const configPath = path.join(__dirname, "config.json");
-  if (!fs.existsSync(configPath)) {
-    return false;
-  }
-
-  try {
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    return !!(
-      config.database &&
-      config.database.host &&
-      config.database.user &&
-      config.database.database
-    );
-  } catch (err) {
-    return false;
-  }
+  const config = loadAppConfig();
+  return !!(
+    config?.database?.host &&
+    config?.database?.user &&
+    config?.database?.database
+  );
 }
 
 // Setup route (always accessible)
@@ -63,11 +54,14 @@ app.use("/api/blogs", require("./routes/blogs"));
 app.use("/api/insta", require("./routes/insta"));
 app.use("/api/tiktok", require("./routes/tiktok"));
 app.use("/api/talking", require("./routes/talkingVideo"));
+app.use("/api/inf-chat", require("./routes/influencerChat"));
 app.use("/api/social-publishing", require("./routes/social-publishing"));
 app.use(
   "/api/prompt-recommendation",
   require("./routes/promptRecommendation"),
 );
+app.use("/api/text-content", require("./routes/textContent"));
+app.use("/api/books", require("./routes/books"));
 
 // Pre-built React app in client/public (build:site copies client/build → public).
 const publicRoot = path.resolve(__dirname, "./client/public");
@@ -94,19 +88,20 @@ app.get("/{*path}", (req, res, next) => {
 });
 
 // Get port from config or default
-let PORT = 8001;
-const configPath = path.join(__dirname, "config.json");
-if (fs.existsSync(configPath)) {
-  try {
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    PORT = config.port || 8001;
-  } catch (err) {
-    console.error("Error reading port from config:", err);
-  }
-}
+const appConfig = loadAppConfig();
+let PORT = appConfig?.port || 8001;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  const cfgFile = path.basename(resolveConfigPath());
+  console.log(
+    `Server running on port ${PORT} [${process.env.NODE_ENV || "production"}] (${cfgFile})`,
+  );
+  if (appConfig?.backendUrl) {
+    console.log(`API URL: ${appConfig.backendUrl}`);
+  }
+  if (appConfig?.frontendUrl) {
+    console.log(`Frontend URL: ${appConfig.frontendUrl}`);
+  }
   mainLoop();
   autoPostInit();
 

@@ -11,17 +11,19 @@ import {
   Collections,
   SlowMotionVideo,
   EmergencyRecording,
+  ChatBubbleOutline,
   SupportAgent,
   HistoryToggleOff,
   NotificationsActive,
   Logout,
   TokenOutlined,
   GroupAddOutlined,
+  AutoAwesome,
+  AutoStories,
 } from "@mui/icons-material";
 import { UserProvider } from "../../context/UserContext";
 import { GlobalContext } from "../../context/GlobalContext";
-
-const drawerWidth = 240;
+import { usePanelChrome } from "../../utils/usePanelChrome";
 
 const UserDashboard = () => {
   const { lang } = React.useContext(TranslateContext);
@@ -29,6 +31,8 @@ const UserDashboard = () => {
   const { hitAxios } = React.useContext(GlobalContext);
   const theme = useTheme();
   const { toggleColorMode, isDark } = useCustomTheme();
+  const chrome = usePanelChrome(240);
+  const drawerWidth = chrome.drawerWidth;
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   async function handleGetWeb() {
@@ -68,9 +72,24 @@ const UserDashboard = () => {
       icon: <SlowMotionVideo />,
     },
     {
+      id: "text-content",
+      text: lang?.textContentWriter || "Content Writer",
+      icon: <AutoAwesome />,
+    },
+    {
+      id: "books",
+      text: lang?.bookWriter || "Book Writer",
+      icon: <AutoStories />,
+    },
+    {
       id: "script-to-video",
       text: lang?.scriptToVideo || "Script to Video",
       icon: <EmergencyRecording />,
+    },
+    {
+      id: "talking-video",
+      text: lang?.influencerChat || "Chat",
+      icon: <ChatBubbleOutline />,
     },
     {
       id: "usage",
@@ -174,6 +193,7 @@ const UserDashboard = () => {
           display: "flex",
           minHeight: "100vh",
           bgcolor: "background.default",
+          ...chrome.shellSx,
         }}
       >
         <Sidebar
@@ -197,6 +217,7 @@ const UserDashboard = () => {
             width: { xs: "100%", md: `calc(100% - ${drawerWidth}px)` },
             display: "flex",
             flexDirection: "column",
+            ...chrome.mainSx,
           }}
         >
           <TopBar
@@ -212,7 +233,7 @@ const UserDashboard = () => {
 
           {isMobile && <Box sx={{ ...theme.mixins.toolbar }} />}
 
-          <Box sx={{ p: { xs: 2, sm: 3 }, flexGrow: 1 }}>
+          <Box sx={{ p: { xs: 2, sm: 3 }, flexGrow: 1, ...chrome.contentSx }}>
             <Content selectedMenu={selectedMenu} web={web} />
           </Box>
         </Box>

@@ -6,14 +6,15 @@ const {
   sendUsageUpdateEmail,
 } = require("../utils/common");
 const { fetchJobStatus, createJob } = require("./api");
-const { frontendUrl } = require("../config.json");
+const { mediaToProviderUrl } = require("../utils/mediaUrl");
 const {
   buildShowcasePrompt,
   normalizeAspectRatio,
   prepareProductImageForShowcase,
 } = require("../utils/showcaseMedia");
 
-const SHOWCASE_STATUS_POLL_SECONDS = 45;
+// xAI video can take a few minutes — poll often so we finish ASAP once ready
+const SHOWCASE_STATUS_POLL_SECONDS = 5;
 
 // ============================================
 // HELPERS
@@ -29,15 +30,9 @@ async function getCreditFee() {
   return parseInt(web?.product_showcase_maker || 0);
 }
 
-async function getActiveProvider() {
-  const [provider] = await query(
-    `SELECT * FROM ai_providers
-     WHERE is_active = ?
-     ORDER BY is_default DESC, id ASC
-     LIMIT 1`,
-    [1],
-  );
-  return provider || null;
+async function getActiveShowcaseProvider() {
+  const { getActiveProvider: loadProvider } = require("../utils/aiProvider");
+  return loadProvider("showcase");
 }
 
 function getUserCredits(user) {
@@ -333,15 +328,9 @@ async function notifyUser(user, { task, des, status }) {
   }
 }
 
-// ── Build public media URL — no upload needed ─────────────────
+// ── Build media reference for providers (base64 for local files) ──
 async function uploadFileToProvider(localPath, _apiKey) {
-  if (localPath.startsWith("http")) return localPath;
-
-  const fileName = path.basename(localPath);
-  const publicUrl = `${frontendUrl}/media/${fileName}`;
-
-  console.log(`📎 Media URL → ${publicUrl}`);
-  return publicUrl;
+  return mediaToProviderUrl(localPath);
 }
 
 async function submitShowcaseVideoJob(item, provider, fee, otherData, influencer) {
@@ -548,9 +537,16 @@ async function processProductShowcase(item, provider, fee) {
 
     let savedPath;
     try {
+      const apiKey =
+        provider?.showcase_api_key ||
+        provider?.reel_api_key ||
+        provider?.txt2img_api_key ||
+        "";
+      console.log(`⬇️  product_content #${id} downloading video…`);
       savedPath = await downloadImage(
         result.data,
         `${__dirname}/../client/public/media`,
+        { apiKey, timeout: 120000 },
       );
     } catch (err) {
       console.error(
@@ -928,6 +924,8 @@ async function processProductShowcase(item, provider, fee) {
 
 async function productShowcase({ provider }) {
   try {
+    if (!provider?.showcase_enabled) return;
+
     const fee = await getCreditFee();
 
     if (fee < 1) {
@@ -976,8 +974,8 @@ async function productShowcase({ provider }) {
 
 async function triggerProductShowcase(id) {
   try {
-    const provider = await getActiveProvider();
-    if (!provider) {
+    const provider = await getActiveShowcaseProvider();
+    if (!provider?.showcase_enabled) {
       await logUsage({
         task: "product_showcase_maker",
         status: "skipped",

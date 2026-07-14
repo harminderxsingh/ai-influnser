@@ -6,7 +6,7 @@ const {
   sendUsageUpdateEmail,
 } = require("../utils/common");
 const { fetchJobStatus, createJob } = require("./api");
-const { frontendUrl } = require("../config.json");
+const { mediaToProviderUrl } = require("../utils/mediaUrl");
 
 const CONTENT_STATUS_POLL_SECONDS = 30;
 
@@ -129,15 +129,9 @@ async function notifyUser(user, { task, des, status }) {
   }
 }
 
-// ── Build public media URL — no upload needed ─────────────────
+// ── Build media reference for providers (base64 for local files) ──
 async function uploadFileToProvider(localPath, _apiKey) {
-  if (localPath.startsWith("http")) return localPath;
-
-  const fileName = path.basename(localPath);
-  const publicUrl = `${frontendUrl}/media/${fileName}`;
-
-  console.log(`📎 Media URL → ${publicUrl}`);
-  return publicUrl;
+  return mediaToProviderUrl(localPath);
 }
 
 // ============================================
@@ -511,6 +505,8 @@ async function processContent(item, provider, fee) {
 
 async function runContent({ provider }) {
   try {
+    if (!provider?.reel_enabled) return;
+
     const fee = await getCreditFee();
 
     if (fee < 1) {

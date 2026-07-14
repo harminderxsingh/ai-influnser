@@ -17,11 +17,19 @@ import { useCustomTheme } from "../../utils/useCustomTheme";
 import { TranslateContext } from "../../context/TranslateContext";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 
-const Hero = ({ web }) => {
+const Hero = ({ web, onPrimaryClick, primaryLabel, headlineAccent }) => {
   const history = useHistory();
   const { config, isDark } = useCustomTheme();
   const { lang } = React.useContext(TranslateContext);
   const [videoOpen, setVideoOpen] = React.useState(false);
+
+  const handlePrimaryClick = () => {
+    if (typeof onPrimaryClick === "function") {
+      onPrimaryClick();
+      return;
+    }
+    history.push("/user");
+  };
 
   // ── theme shortcuts ──
   const bgDefault = isDark
@@ -194,7 +202,7 @@ const Hero = ({ web }) => {
                   backgroundClip: "text",
                 }}
               >
-                {lang?.heroHeadlineAccent || "Viral Reels"}
+                {headlineAccent || lang?.heroHeadlineAccent || "Viral Reels"}
               </Typography>
 
               <Typography
@@ -235,7 +243,7 @@ const Hero = ({ web }) => {
             >
               {/* Primary — Start Creating */}
               <Button
-                onClick={() => history.push("/user")}
+                onClick={handlePrimaryClick}
                 variant="contained"
                 disableElevation
                 startIcon={<PlayArrowRoundedIcon />}
@@ -259,7 +267,7 @@ const Hero = ({ web }) => {
                   },
                 }}
               >
-                {lang?.heroCtaStart || "Start Creating"}
+                {primaryLabel || lang?.heroCtaStart || "Start Creating"}
               </Button>
 
               {/* Secondary — Watch Demo (only if youtube url exists) */}

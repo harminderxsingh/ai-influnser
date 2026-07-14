@@ -67,9 +67,18 @@
       "color_light": "#C2410C",
       "color_dark": "#FB923C"
     },
-    "small": { "padding": "4px 10px", "fontSize": "0.6875rem" },
-    "medium": { "padding": "6px 14px", "fontSize": "0.75rem" },
-    "large": { "padding": "8px 18px", "fontSize": "0.8125rem" }
+    "small": {
+      "padding": "4px 10px",
+      "fontSize": "0.6875rem"
+    },
+    "medium": {
+      "padding": "6px 14px",
+      "fontSize": "0.75rem"
+    },
+    "large": {
+      "padding": "8px 18px",
+      "fontSize": "0.8125rem"
+    }
   },
   "card": {
     "borderRadius": 10,
@@ -130,12 +139,22 @@
     "backdropOpacity": 0.6
   },
   "appBar": {
-    "height": 52,
+    "height": 88,
     "padding": "0 16px",
     "boxShadow": "none",
     "backgroundColor_light": "rgba(255, 247, 237, 0.85)",
     "backgroundColor_dark": "rgba(28, 10, 0, 0.85)",
-    "borderBottom": "1px solid rgba(194, 65, 12, 0.12)"
+    "borderBottom": "1px solid rgba(194, 65, 12, 0.12)",
+    "logoHeightXs": 56,
+    "logoHeightSm": 64,
+    "logoHeightMd": 72,
+    "logoMaxWidthXs": 200,
+    "logoMaxWidthSm": 240,
+    "logoMaxWidthMd": 280,
+    "logoMinWidthXs": 120,
+    "logoMinWidthMd": 140,
+    "footerLogoHeight": 80,
+    "footerLogoMaxWidth": 280
   },
   "drawer": {
     "width": 220,
@@ -313,12 +332,13 @@
   "spacing_unit": 6,
   "transition_duration": "0.2s",
   "transition_easing": "cubic-bezier(0.4, 0, 0.2, 1)",
-  "gradient_primary_light": "linear-gradient(135deg, #C2410C 0%, #EA580C 100%)",
-  "gradient_primary_dark": "linear-gradient(135deg, #FB923C 0%, #FCD34D 100%)",
+  "gradient_primary_light": "linear-gradient(135deg, #C2410C 0%, #EA580C 40%, #DB2777 100%)",
+  "gradient_primary_dark": "linear-gradient(135deg, #FB923C 0%, #F472B6 50%, #FCD34D 100%)",
   "gradient_secondary": "linear-gradient(135deg, #9D174D 0%, #C2410C 50%, #D97706 100%)",
   "gradient_success": "linear-gradient(135deg, #10B981 0%, #34D399 100%)",
   "glass_bg_light": "rgba(255, 247, 237, 0.75)",
   "glass_bg_dark": "rgba(28, 10, 0, 0.75)",
   "glass_blur": "12px",
-  "lastUpdated": "2026-03-16T19:42:00.000Z"
+  "lastUpdated": "2026-07-11T13:52:47.858Z",
+  "gradient_primary": "linear-gradient(135deg, #C2410C 0%, #DB2777 100%)"
 }

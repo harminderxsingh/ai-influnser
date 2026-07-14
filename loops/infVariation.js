@@ -4,11 +4,20 @@ const {
   logUsage,
   sendUsageUpdateEmail,
 } = require("../utils/common");
-const { fetchJobStatus, createJob } = require("./api");
+const { fetchJobStatus, createJob, fromSyncTaskId } = require("./api");
 const path = require("path");
 const { frontendUrl } = require("../config.json");
 
-const GALLERY_STATUS_POLL_SECONDS = 30;
+const GALLERY_STATUS_POLL_SECONDS = 5;
+
+function mediaDownloadOpts(provider) {
+  const apiKey =
+    provider?.img2img_api_key ||
+    provider?.txt2img_api_key ||
+    provider?.reel_api_key ||
+    "";
+  return { apiKey, timeout: 45000 };
+}
 
 // ============================================
 // HELPERS
@@ -199,6 +208,7 @@ async function processVariation(item, provider, fee) {
       savedPath = await downloadImage(
         result.data,
         `${__dirname}/../client/public/media`,
+        mediaDownloadOpts(provider),
       );
     } catch (err) {
       console.error(
@@ -520,6 +530,70 @@ async function processVariation(item, provider, fee) {
     status: "processing",
     des: `gallery #${id} job submitted — taskId: ${create.taskId}`,
   });
+
+  // Sync providers already have the final URL — download immediately
+  const syncUrl = fromSyncTaskId(create.taskId);
+  if (syncUrl) {
+    let savedPath;
+    try {
+      console.log(`⬇️  gallery #${id} sync result — downloading now…`);
+      savedPath = await downloadImage(
+        syncUrl,
+        `${__dirname}/../client/public/media`,
+        mediaDownloadOpts(provider),
+      );
+    } catch (err) {
+      console.error(
+        `❌ downloadImage failed for gallery #${id}:`,
+        err.message,
+        "| URL:",
+        syncUrl,
+      );
+      await refundCredits(uid, fee);
+      await setGalleryError(id, `downloadImage failed: ${err.message}`);
+      const des = `gallery #${id} download failed — ${fee}cr refunded. Error: ${err.message} | URL: ${syncUrl}`;
+      await logUsage({
+        uid,
+        task: "inf_var_maker",
+        credits: fee,
+        status: "refunded",
+        des,
+      });
+      await notifyUser(user, {
+        task: "Influencer Variation",
+        des,
+        status: "Refunded",
+      });
+      return;
+    }
+
+    if (!savedPath) {
+      await refundCredits(uid, fee);
+      await setGalleryError(id, "downloadImage returned empty path");
+      return;
+    }
+
+    await query(
+      `UPDATE gallery SET status = 'active', generated_photo = ? WHERE id = ?`,
+      [savedPath, id],
+    );
+    console.log(`✅ gallery #${id} completed — saved to ${savedPath}`);
+    const successDes = `gallery #${id} completed successfully — image saved to ${savedPath}`;
+    await logUsage({
+      uid,
+      task: "inf_var_maker",
+      credits: fee,
+      status: "success",
+      des: successDes,
+    });
+    await notifyUser(user, {
+      task: "Influencer Variation",
+      des: successDes,
+      status: "Success",
+    });
+    return;
+  }
+
   await notifyUser(user, {
     task: "Influencer Variation",
     des: `Your variation #${id} is being generated. We'll notify you once it's ready.`,
@@ -533,6 +607,8 @@ async function processVariation(item, provider, fee) {
 
 async function runInfVariation({ provider }) {
   try {
+    if (!provider?.img2img_enabled) return;
+
     const fee = await getCreditFee();
 
     if (fee < 1) {
@@ -554,6 +630,7 @@ async function runInfVariation({ provider }) {
          AND (
            job_id IS NULL
            OR job_id = ''
+           OR job_id LIKE 'sync:%'
            OR updated_at < DATE_SUB(NOW(), INTERVAL ${GALLERY_STATUS_POLL_SECONDS} SECOND)
          )`,
     );

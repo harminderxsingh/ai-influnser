@@ -70,7 +70,7 @@ router.post("/add_new_task", validateUser, checkPlan, async (req, res) => {
     }
 
     try {
-      await query(
+      const insertResult = await query(
         `INSERT INTO talking_content 
         (uid, model, image_url, text, voice, lang, gender, voice_style, project_style, aspect_ratio, character_style, status, submission_key)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -90,6 +90,35 @@ router.post("/add_new_task", validateUser, checkPlan, async (req, res) => {
           submissionKey,
         ],
       );
+
+      const newId = insertResult.insertId;
+      const { triggerTalkingVideo } = require("../loops/talkingVideo");
+      // Fire-and-forget start so reply begins immediately (don't block response too long)
+      let triggerResult = null;
+      try {
+        triggerResult = await triggerTalkingVideo(newId);
+      } catch (err) {
+        console.warn("triggerTalkingVideo:", err.message);
+      }
+
+      return res.json({
+        success: true,
+        msg: "Your talking reply is being generated!",
+        id: newId,
+        status: triggerResult?.status || "processing",
+        job_id: triggerResult?.job_id || null,
+        data: {
+          id: newId,
+          uid,
+          model: modelJson,
+          image_url: imageUrl,
+          text: trimmedText,
+          status: "processing",
+          generated_video: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      });
     } catch (insertErr) {
       if (insertErr.code === "ER_DUP_ENTRY") {
         const [existing] = await query(
@@ -106,8 +135,6 @@ router.post("/add_new_task", validateUser, checkPlan, async (req, res) => {
 
       throw insertErr;
     }
-
-    res.json({ success: true, msg: "Your talking video is being generated!" });
   } catch (err) {
     console.error(err);
     res.json({ success: false, msg: "Something went wrong" });
@@ -147,45 +174,36 @@ router.post("/del_one", validateUser, checkPlan, async (req, res) => {
 router.get("/tts/languages", validateUser, async (req, res) => {
   try {
     const axios = require("axios");
+    const { getActiveProvider } = require("../utils/aiProvider");
 
-    // Get the Usevelix provider API key from your ai_providers table
-    const providers = await query(
-      `SELECT * FROM ai_providers WHERE provider_key = ? LIMIT 1`,
-      ["usevelix"],
-    );
-
-    if (!providers.length) {
+    const provider = await getActiveProvider("talking");
+    if (!provider) {
       return res.json({
         success: false,
-        error: "Usevelix provider not configured",
+        error: "No active talking provider configured",
         languages: [],
       });
     }
 
-    const apiKey = providers[0].talking_api_key;
+    const apiKey = provider.talking_api_key;
+    const baseUrl = String(provider.talking_base_url || "").replace(/\/$/, "");
 
-    if (!apiKey) {
+    if (!apiKey || !baseUrl) {
       return res.json({
         success: false,
-        error: "No API key found for Usevelix",
+        error: "Talking provider API key / base URL missing",
         languages: [],
       });
     }
 
-    // Hit Usevelix external server
-    const response = await axios.get(
-      "https://usevelix.com/api/v1/tts/languages",
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: "application/json",
-        },
-        timeout: 15000,
+    const response = await axios.get(`${baseUrl}/api/v1/tts/languages`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
       },
-    );
+      timeout: 15000,
+    });
 
-    // Response is already {success, total, languages:[{code,name}]}
-    // Just pass languages straight through — no mapping needed
     return res.json({
       success: true,
       languages: response.data.languages || [],
@@ -200,6 +218,7 @@ router.get("/tts/languages", validateUser, async (req, res) => {
 router.get("/tts/voices", validateUser, async (req, res) => {
   try {
     const axios = require("axios");
+    const { getActiveProvider } = require("../utils/aiProvider");
     const { lang, gender } = req.query;
 
     if (!lang) {
@@ -210,38 +229,34 @@ router.get("/tts/voices", validateUser, async (req, res) => {
       });
     }
 
-    const providers = await query(
-      `SELECT * FROM ai_providers WHERE provider_key = 'usevelix' LIMIT 1`,
-    );
-
-    if (!providers.length) {
+    const provider = await getActiveProvider("talking");
+    if (!provider) {
       return res.json({
         success: false,
-        error: "Usevelix provider not configured",
+        error: "No active talking provider configured",
         voices: [],
       });
     }
 
     const apiKey =
-      providers[0].talking_api_key ||
-      providers[0].txt2img_api_key ||
-      providers[0].api_key;
+      provider.talking_api_key ||
+      provider.txt2img_api_key ||
+      provider.api_key;
+    const baseUrl = String(provider.talking_base_url || "").replace(/\/$/, "");
 
-    if (!apiKey) {
+    if (!apiKey || !baseUrl) {
       return res.json({
         success: false,
-        error: "No API key found for Usevelix",
+        error: "Talking provider API key / base URL missing",
         voices: [],
       });
     }
 
-    // Build params — pass gender only if not "all"
     const params = new URLSearchParams({ lang });
     if (gender && gender !== "all") params.append("gender", gender);
 
-    // Hit Usevelix external server
     const response = await axios.get(
-      `https://usevelix.com/api/v1/tts/voices?${params.toString()}`,
+      `${baseUrl}/api/v1/tts/voices?${params.toString()}`,
       {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -251,8 +266,6 @@ router.get("/tts/voices", validateUser, async (req, res) => {
       },
     );
 
-    // Response is already {success, lang, gender, total, voices:[...]}
-    // Pass voices straight through — no mapping needed
     return res.json({
       success: true,
       voices: response.data.voices || [],

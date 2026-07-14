@@ -254,9 +254,15 @@ router.post("/add_model", validateUser, checkPlan, async (req, res) => {
         creation_type === "prompt"
           ? "AI character is being generated. This may take a few minutes..."
           : "Character created successfully!",
+      id: result.insertId,
       data: {
         id: result.insertId,
         uid,
+        name,
+        description,
+        creation_type,
+        photo_url: photoFilename || null,
+        prompt: prompt || null,
         status,
       },
     });

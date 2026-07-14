@@ -6,6 +6,8 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import StarIcon from "@mui/icons-material/Star";
 import CheckIcon from "@mui/icons-material/Check";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import { GlobalContext } from "../../context/GlobalContext";
 import { useCurrency } from "../../context/CurrencyContext";
 import { TranslateContext } from "../../context/TranslateContext";
@@ -83,8 +85,10 @@ const PricingCard = ({ plan, history, formatPrice }) => {
             ? "0 32px 80px rgba(0,0,0,0.7)"
             : "0 32px 80px rgba(0,0,0,0.15)",
         },
-        width: { xs: "100%", md: isPopular ? 310 : 280 },
+        width: { xs: 280, sm: 300, md: isPopular ? 310 : 290 },
+        minHeight: 460,
         flexShrink: 0,
+        scrollSnapAlign: "start",
       }}
     >
       {/* ── Popular badge ── */}
@@ -219,7 +223,6 @@ const PricingCard = ({ plan, history, formatPrice }) => {
 
       {/* ── Pills: Credits + Expiry + Max Models ── */}
       <Box sx={{ display: "flex", gap: 1, mt: 2, mb: 3, flexWrap: "wrap" }}>
-        {/* Credits pill */}
         <Box
           sx={{
             display: "inline-flex",
@@ -247,7 +250,6 @@ const PricingCard = ({ plan, history, formatPrice }) => {
           </Typography>
         </Box>
 
-        {/* Expiry pill */}
         <Box
           sx={{
             display: "inline-flex",
@@ -275,7 +277,6 @@ const PricingCard = ({ plan, history, formatPrice }) => {
           </Typography>
         </Box>
 
-        {/* Max Models pill */}
         <Box
           sx={{
             display: "inline-flex",
@@ -407,6 +408,7 @@ const Pricing = () => {
   const { formatPrice } = useCurrency();
   const { lang } = React.useContext(TranslateContext);
   const { config, isDark } = useCustomTheme();
+  const sliderRef = React.useRef(null);
 
   const bgDefault = isDark
     ? config.background_default_dark
@@ -424,6 +426,9 @@ const Pricing = () => {
   const btnBg = isDark
     ? config.button.contained.backgroundColor_dark
     : config.button.contained.backgroundColor_light;
+  const btnColor = isDark
+    ? config.button.contained.color_dark
+    : config.button.contained.color_light;
 
   async function getPlans() {
     const res = await hitAxios({
@@ -444,6 +449,14 @@ const Pricing = () => {
     getPlans();
   }, []);
 
+  const scroll = (dir) => {
+    if (!sliderRef.current) return;
+    sliderRef.current.scrollBy({
+      left: dir === "left" ? -320 : 320,
+      behavior: "smooth",
+    });
+  };
+
   return (
     <Box
       sx={{
@@ -458,86 +471,163 @@ const Pricing = () => {
       }}
     >
       {/* ── Header ── */}
-      <Box sx={{ textAlign: "center", mb: 7, maxWidth: 560 }}>
-        <Box
-          sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 0.75,
-            border: `1px solid ${borderColor}`,
-            borderRadius: "50px",
-            px: 1.5,
-            py: 0.5,
-            mb: 2.5,
-          }}
-        >
-          <FiberManualRecordIcon
-            sx={{
-              fontSize: "0.45rem",
-              color: accentColor || btnBg,
-              filter: `drop-shadow(0 0 4px ${accentColor || btnBg})`,
-              animation: "pulse 2s ease-in-out infinite",
-              "@keyframes pulse": {
-                "0%, 100%": { opacity: 1 },
-                "50%": { opacity: 0.4 },
-              },
-            }}
-          />
-          <Typography
-            sx={{
-              fontSize: "0.7rem",
-              fontWeight: config.font_weight_semibold,
-              color: textSecondary,
-              fontFamily: config.font_family,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            {lang?.pricing_badge || "Simple Pricing"}
-          </Typography>
-        </Box>
-
-        <Typography
-          component="h2"
-          sx={{
-            fontSize: { xs: "2rem", md: "2.8rem" },
-            fontWeight: config.font_weight_bold,
-            color: textPrimary,
-            fontFamily: config.font_family,
-            lineHeight: 1.15,
-            letterSpacing: "-1px",
-            mb: 1.5,
-          }}
-        >
-          {lang?.pricing_headline1 || "One plan for every"}{" "}
-          <Box component="span" sx={{ color: accentColor || textSecondary }}>
-            {lang?.pricing_headlineAccent || "creator."}
-          </Box>
-        </Typography>
-
-        <Typography
-          sx={{
-            fontSize: "1rem",
-            color: textSecondary,
-            fontFamily: config.font_family,
-            lineHeight: 1.7,
-          }}
-        >
-          {lang?.pricing_subheadline ||
-            "Start free, scale when ready. No hidden fees — just credits that power your AI content."}
-        </Typography>
-      </Box>
-
-      {/* ── Cards ── */}
       <Box
         sx={{
           display: "flex",
-          flexDirection: { xs: "column", md: "row" },
-          alignItems: { xs: "center", md: "flex-end" },
-          justifyContent: "center",
-          gap: { xs: 3, md: 2.5 },
+          alignItems: { xs: "flex-start", sm: "flex-end" },
+          justifyContent: "space-between",
+          flexDirection: { xs: "column", sm: "row" },
           width: "100%",
-          maxWidth: "960px",
+          maxWidth: "1100px",
+          mb: 5,
+          gap: 2.5,
+        }}
+      >
+        <Box sx={{ textAlign: { xs: "center", sm: "left" }, maxWidth: 560 }}>
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 0.75,
+              border: `1px solid ${borderColor}`,
+              borderRadius: "50px",
+              px: 1.5,
+              py: 0.5,
+              mb: 2.5,
+            }}
+          >
+            <FiberManualRecordIcon
+              sx={{
+                fontSize: "0.45rem",
+                color: accentColor || btnBg,
+                filter: `drop-shadow(0 0 4px ${accentColor || btnBg})`,
+                animation: "pulse 2s ease-in-out infinite",
+                "@keyframes pulse": {
+                  "0%, 100%": { opacity: 1 },
+                  "50%": { opacity: 0.4 },
+                },
+              }}
+            />
+            <Typography
+              sx={{
+                fontSize: "0.7rem",
+                fontWeight: config.font_weight_semibold,
+                color: textSecondary,
+                fontFamily: config.font_family,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              {lang?.pricing_badge || "Simple Pricing"}
+            </Typography>
+          </Box>
+
+          <Typography
+            component="h2"
+            sx={{
+              fontSize: { xs: "2rem", md: "2.8rem" },
+              fontWeight: config.font_weight_bold,
+              color: textPrimary,
+              fontFamily: config.font_family,
+              lineHeight: 1.15,
+              letterSpacing: "-1px",
+              mb: 1.5,
+            }}
+          >
+            {lang?.pricing_headline1 || "One plan for every"}{" "}
+            <Box component="span" sx={{ color: accentColor || textSecondary }}>
+              {lang?.pricing_headlineAccent || "creator."}
+            </Box>
+          </Typography>
+
+          <Typography
+            sx={{
+              fontSize: "1rem",
+              color: textSecondary,
+              fontFamily: config.font_family,
+              lineHeight: 1.7,
+            }}
+          >
+            {lang?.pricing_subheadline ||
+              "Start free, scale when ready. No hidden fees — just credits that power your AI content."}
+          </Typography>
+        </Box>
+
+        {plans.length > 1 && (
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              alignSelf: { xs: "center", sm: "flex-end" },
+            }}
+          >
+            <Box
+              onClick={() => scroll("left")}
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                border: `1px solid ${borderColor}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  background: accentColor || btnBg,
+                  borderColor: "transparent",
+                  "& svg": { color: btnColor },
+                },
+              }}
+            >
+              <ArrowBackIosNewIcon
+                sx={{ fontSize: "0.85rem", color: textSecondary }}
+              />
+            </Box>
+            <Box
+              onClick={() => scroll("right")}
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                border: `1px solid ${borderColor}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  background: accentColor || btnBg,
+                  borderColor: "transparent",
+                  "& svg": { color: btnColor },
+                },
+              }}
+            >
+              <ArrowForwardIosIcon
+                sx={{ fontSize: "0.85rem", color: textSecondary }}
+              />
+            </Box>
+          </Box>
+        )}
+      </Box>
+
+      {/* ── Cards slider ── */}
+      <Box
+        ref={sliderRef}
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "stretch",
+          gap: 2.5,
+          width: "100%",
+          maxWidth: "1100px",
+          overflowX: "auto",
+          scrollSnapType: "x mandatory",
+          pt: 2,
+          pb: 2,
+          px: 0.5,
+          "&::-webkit-scrollbar": { display: "none" },
+          scrollbarWidth: "none",
         }}
       >
         {plans.map((plan) => (

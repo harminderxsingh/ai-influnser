@@ -82,6 +82,24 @@ const TASK_TYPES = (lang) => [
       lang?.promptRecommendationDesc ||
       "Credits required to generate recommended prompt ideas",
   },
+  {
+    key: "text_content_maker",
+    icon: TipsAndUpdatesOutlined,
+    color: "#0EA5E9",
+    title: lang?.textContentMaker || "Text Content Writer",
+    desc:
+      lang?.textContentMakerDesc ||
+      "Credits required to generate text content (captions, scripts, blogs, ads)",
+  },
+  {
+    key: "book_writer_maker",
+    icon: TipsAndUpdatesOutlined,
+    color: "#78716C",
+    title: lang?.bookWriterMaker || "Book Writer (per page)",
+    desc:
+      lang?.bookWriterMakerDesc ||
+      "Credits charged per page when generating an AI book",
+  },
 ];
 
 // ── Task Row ──────────────────────────────────────────────
@@ -165,6 +183,8 @@ const TaskPricing = ({ lang }) => {
     product_showcase_maker: "",
     talking_video_maker: "",
     prompt_recommend_maker: "",
+    text_content_maker: "",
+    book_writer_maker: "",
   });
 
   // ── Fetch existing values on mount
@@ -183,6 +203,8 @@ const TaskPricing = ({ lang }) => {
         product_showcase_maker: Number(d.product_showcase_maker),
         talking_video_maker: Number(d.talking_video_maker),
         prompt_recommend_maker: Number(d.prompt_recommend_maker || 5),
+        text_content_maker: Number(d.text_content_maker || 3),
+        book_writer_maker: Number(d.book_writer_maker || 2),
       });
     }
   }, [hitAxios]);
@@ -200,6 +222,8 @@ const TaskPricing = ({ lang }) => {
         product_showcase_maker: credits.product_showcase_maker,
         talking_video_maker: credits.talking_video_maker,
         prompt_recommend_maker: credits.prompt_recommend_maker,
+        text_content_maker: credits.text_content_maker,
+        book_writer_maker: credits.book_writer_maker,
       },
     });
   }

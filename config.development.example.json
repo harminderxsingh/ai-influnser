@@ -1,0 +1,12 @@
+{
+  "database": {
+    "host": "localhost",
+    "user": "root",
+    "password": "",
+    "database": "ai_influncer_dev"
+  },
+  "port": 8002,
+  "jwt": "GENERATE_A_LONG_RANDOM_SECRET",
+  "backendUrl": "http://localhost:8002",
+  "frontendUrl": "http://localhost:3000"
+}

@@ -10,12 +10,14 @@ import {
   Modal,
   Backdrop,
   Skeleton,
+  CircularProgress,
   useTheme,
 } from "@mui/material";
 import {
   DeleteOutlined,
   ZoomInOutlined,
   CloseOutlined,
+  AutoAwesome,
 } from "@mui/icons-material";
 
 const InfluencerCard = ({ influencer, onDelete, lang }) => {
@@ -23,6 +25,9 @@ const InfluencerCard = ({ influencer, onDelete, lang }) => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const isActive = influencer?.status === "active";
+  const isProcessing =
+    influencer?.status === "processing" ||
+    influencer?.status === "submitting";
   const hasPhoto = !!influencer?.photo_url;
   const canOpenLightbox = isActive && hasPhoto;
 
@@ -94,12 +99,50 @@ const InfluencerCard = ({ influencer, onDelete, lang }) => {
             )}
           </Box>
         ) : (
-          <Skeleton
-            sx={{ bgcolor: "grey.900" }}
-            variant="rectangular"
-            width="100%"
-            height="100%"
-          />
+          <Box
+            sx={{
+              width: "100%",
+              height: "100%",
+              position: "relative",
+              bgcolor: "grey.900",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 1.5,
+              px: 2,
+            }}
+          >
+            {isProcessing ? (
+              <>
+                <CircularProgress size={36} thickness={4} />
+                <AutoAwesome sx={{ color: "warning.main", fontSize: 22 }} />
+                <Typography
+                  variant="body2"
+                  color="warning.main"
+                  fontWeight={700}
+                  textAlign="center"
+                >
+                  {lang?.processing || "Processing"}…
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="grey.400"
+                  textAlign="center"
+                >
+                  {lang?.generatingCharacter ||
+                    "AI is generating your character"}
+                </Typography>
+              </>
+            ) : (
+              <Skeleton
+                sx={{ bgcolor: "grey.800", position: "absolute", inset: 0 }}
+                variant="rectangular"
+                width="100%"
+                height="100%"
+              />
+            )}
+          </Box>
         )}
 
         {/* ── Gradient + Info Overlay ── */}
@@ -157,10 +200,12 @@ const InfluencerCard = ({ influencer, onDelete, lang }) => {
             label={
               isActive
                 ? lang?.active || "Active"
-                : lang?.processing || "Processing"
+                : isProcessing
+                  ? lang?.processing || "Processing"
+                  : influencer.status
             }
             size="small"
-            color={isActive ? "success" : "warning"}
+            color={isActive ? "success" : isProcessing ? "warning" : "default"}
             sx={{ position: "absolute", top: 8, left: 8, zIndex: 2 }}
           />
         )}

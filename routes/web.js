@@ -300,6 +300,8 @@ router.post("/update_credit_set", adminValidator, async (req, res) => {
       product_showcase_maker,
       talking_video_maker,
       prompt_recommend_maker,
+      text_content_maker,
+      book_writer_maker,
     } = req.body;
 
     if (
@@ -308,13 +310,15 @@ router.post("/update_credit_set", adminValidator, async (req, res) => {
       !content_video_maker ||
       !product_showcase_maker ||
       !talking_video_maker ||
-      !prompt_recommend_maker
+      !prompt_recommend_maker ||
+      !text_content_maker ||
+      !book_writer_maker
     ) {
       return res.json({ msg: "You cant sent 0 or null value" });
     }
 
     await query(
-      `UPDATE web_private SET inf_maker = ?, inf_var_maker = ?, content_video_maker = ?, product_showcase_maker = ?, talking_video_maker = ?, prompt_recommend_maker = ?`,
+      `UPDATE web_private SET inf_maker = ?, inf_var_maker = ?, content_video_maker = ?, product_showcase_maker = ?, talking_video_maker = ?, prompt_recommend_maker = ?, text_content_maker = ?, book_writer_maker = ?`,
       [
         inf_maker,
         inf_var_maker,
@@ -322,6 +326,8 @@ router.post("/update_credit_set", adminValidator, async (req, res) => {
         product_showcase_maker,
         talking_video_maker,
         prompt_recommend_maker,
+        text_content_maker,
+        book_writer_maker,
       ],
     );
 

@@ -295,16 +295,35 @@ router.get("/public-settings", async (req, res) => {
     const requestedPath = cleanPagePath(req.query.path || "");
     if (requestedPath) {
       const [page] = await query(
-        `SELECT * FROM launchpad_pages WHERE page_path = ? AND active = 1 LIMIT 1`,
+        `SELECT lp.*, p.title AS plan_title, p.credits AS plan_credits,
+                p.max_characters AS plan_max_characters, p.price AS plan_price,
+                p.price_strike AS plan_price_strike, p.expiry_days AS plan_expiry_days
+         FROM launchpad_pages lp
+         LEFT JOIN plan p ON p.id = lp.plan_id
+         WHERE lp.page_path = ? AND lp.active = 1
+         LIMIT 1`,
         [requestedPath],
       );
+      // Custom paths (e.g. /starter, /dfy/ds) are controlled by the page row itself.
+      // Global launchpad_active only gates the legacy /launchpad embed.
       return res.json({
         success: true,
         data: {
-          active: settings.active && !!page,
+          active: !!page,
           page_slug: requestedPath,
           embed_html: page?.embed_html || "",
           product_name: page?.product_name || "",
+          plan: page?.plan_id
+            ? {
+                id: page.plan_id,
+                title: page.plan_title || "",
+                credits: page.plan_credits,
+                max_characters: page.plan_max_characters,
+                price: page.plan_price,
+                price_strike: page.plan_price_strike,
+                expiry_days: page.plan_expiry_days,
+              }
+            : null,
         },
       });
     }

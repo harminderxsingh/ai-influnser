@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useCallback } from "react";
+import axios from "axios";
 import {
   detectCountryCode,
   formatPrice as formatPriceUtil,
   convertUsdPrice,
 } from "../utils/currency";
+
+const DEFAULT_USD_TO_INR = 95;
 
 const CurrencyContext = createContext(null);
 
@@ -15,15 +18,40 @@ export const useCurrency = () => {
   return context;
 };
 
+function parseUsdToInrRate(value) {
+  const rate = parseFloat(value);
+  return Number.isFinite(rate) && rate > 1 ? rate : DEFAULT_USD_TO_INR;
+}
+
 export const CurrencyProvider = ({ children }) => {
   const [country, setCountryState] = React.useState(detectCountryCode);
+  const [usdToInrRate, setUsdToInrRate] = React.useState(DEFAULT_USD_TO_INR);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(
+          `${process.env.REACT_APP_BASE_URL}/api/web/get_web_public`,
+        );
+        if (!cancelled && res?.data?.success) {
+          setUsdToInrRate(parseUsdToInrRate(res.data.data?.currency_exchange_rate));
+        }
+      } catch (_) {
+        // keep default rate
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const currency = React.useMemo(() => {
     if (country === "IN") {
       return {
         symbol: "₹",
         code: "INR",
-        rate: 85,
+        rate: usdToInrRate,
         base: "USD",
         country: "IN",
       };
@@ -36,7 +64,7 @@ export const CurrencyProvider = ({ children }) => {
       base: "USD",
       country: country || "US",
     };
-  }, [country]);
+  }, [country, usdToInrRate]);
 
   const setCountry = useCallback((code) => {
     const nextCountry = String(code || "US").toUpperCase();

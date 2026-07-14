@@ -463,9 +463,12 @@ router.post("/save_web_public", adminValidator, async (req, res) => {
           custom_homepage_enabled ? 1 : 0,
           custom_homepage_url,
           youtube_tutorial_url,
-          "$",
-          "USD",
-          1,
+          currency_symbol || "$",
+          currency_code || "USD",
+          (() => {
+            const rate = parseFloat(currency_exchange_rate);
+            return Number.isFinite(rate) && rate > 0 ? rate : 95;
+          })(),
           referral_enabled ? 1 : 0,
           referral_signup_credits || 0,
           referral_referrer_credits || 0,
@@ -503,9 +506,12 @@ router.post("/save_web_public", adminValidator, async (req, res) => {
           custom_homepage_enabled ? 1 : 0,
           custom_homepage_url,
           youtube_tutorial_url,
-          "$",
-          "USD",
-          1,
+          currency_symbol || "$",
+          currency_code || "USD",
+          (() => {
+            const rate = parseFloat(currency_exchange_rate);
+            return Number.isFinite(rate) && rate > 0 ? rate : 95;
+          })(),
           referral_enabled ? 1 : 0,
           referral_signup_credits || 0,
           referral_referrer_credits || 0,

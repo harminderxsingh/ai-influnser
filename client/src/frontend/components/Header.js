@@ -295,7 +295,7 @@ const Header = ({ web: webProp }) => {
             <ThemeToggleButton />
 
             <Button
-              onClick={() => history.push("/user")}
+              onClick={() => history.push("/user/login")}
               sx={{
                 color: textSecondary,
                 fontSize: config.button.text.fontSize,
@@ -315,7 +315,7 @@ const Header = ({ web: webProp }) => {
             </Button>
 
             <Button
-              onClick={() => history.push("/user")}
+              onClick={() => history.push("/user/signup")}
               variant="contained"
               disableElevation
               sx={{
@@ -426,7 +426,7 @@ const Header = ({ web: webProp }) => {
         >
           <Button
             fullWidth
-            onClick={() => history.push("/user")}
+            onClick={() => history.push("/user/login")}
             sx={{
               color: textSecondary,
               fontFamily: config.font_family,
@@ -447,7 +447,7 @@ const Header = ({ web: webProp }) => {
 
           <Button
             fullWidth
-            onClick={() => history.push("/user")}
+            onClick={() => history.push("/user/signup")}
             variant="contained"
             disableElevation
             sx={{

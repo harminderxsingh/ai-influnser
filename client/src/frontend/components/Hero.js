@@ -28,7 +28,7 @@ const Hero = ({ web, onPrimaryClick, primaryLabel, headlineAccent }) => {
       onPrimaryClick();
       return;
     }
-    history.push("/user");
+    history.push("/user/signup");
   };
 
   // ── theme shortcuts ──

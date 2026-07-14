@@ -175,11 +175,11 @@ async function applyReferralCredits({ uid, referralCode }) {
 }
 
 // ─────────────────────────────────────────────
-// Login / Signup
+// Login (existing users only)
 // ─────────────────────────────────────────────
 router.post("/login", async (req, res) => {
   try {
-    const { email: emailBefore, password, referral_code } = req.body;
+    const { email: emailBefore, password } = req.body;
     const env = getEnv();
 
     if (!emailBefore || !password) {
@@ -198,66 +198,133 @@ router.post("/login", async (req, res) => {
     const [user] = await query(`SELECT * FROM user WHERE email = ?`, [email]);
 
     if (!user) {
-      // ── New User Signup ──
-      const haspass = await bcrypt.hash(password, 10);
-      const uid = randomstring.generate();
-      const token_version = crypto.randomUUID();
-      const referralCode = await generateReferralCode();
-
-      const verifyToken = crypto.randomBytes(32).toString("hex");
-      await query(
-        `INSERT INTO user
-         (uid, email, password, token_version, referral_code, email_verified, email_verify_token, email_verify_sent_at)
-         VALUES (?,?,?,?,?,0,?,NOW())`,
-        [uid, email, haspass, token_version, referralCode, verifyToken],
-      );
-      await applyReferralCredits({ uid, referralCode: referral_code });
-      const sendResult = await sendVerificationEmail({
-        req,
-        email,
-        token: verifyToken,
-      });
-
       return res.json({
-        success: true,
-        emailVerificationRequired: true,
-        email,
-        msg: sendResult?.success
-          ? "Please verify your email. We sent a verification link to your inbox."
-          : `Account created, but verification email could not be sent: ${sendResult?.msg}`,
+        success: false,
+        msg: "No account found with this email. Please sign up first.",
+        needsSignup: true,
       });
-    } else {
-      // ── Existing User Login ──
-      const compare = await bcrypt.compare(password, user?.password);
-      if (!compare) {
-        return res.json({ msg: "Invalid credentials" });
-      }
-
-      if (Number(user.email_verified ?? 1) !== 1) {
-        const sendResult = await createAndSendVerificationEmail(req, user);
-        return res.json({
-          success: false,
-          emailVerificationRequired: true,
-          email: user.email,
-          msg: sendResult?.success
-            ? "Please verify your email. We sent a new verification link."
-            : `Please verify your email. Could not send email: ${sendResult?.msg}`,
-        });
-      }
-
-      const token_version = crypto.randomUUID();
-      await query(`UPDATE user SET token_version = ? WHERE uid = ?`, [
-        token_version,
-        user.uid,
-      ]);
-
-      const token = sign(
-        { uid: user.uid, role: "user", email: user.email, token_version },
-        env?.jwt,
-        {},
-      );
-      return res.json({ success: true, token });
     }
+
+    const compare = await bcrypt.compare(password, user?.password);
+    if (!compare) {
+      return res.json({ msg: "Invalid credentials", success: false });
+    }
+
+    if (Number(user.email_verified ?? 1) !== 1) {
+      const sendResult = await createAndSendVerificationEmail(req, user);
+      return res.json({
+        success: false,
+        emailVerificationRequired: true,
+        email: user.email,
+        msg: sendResult?.success
+          ? "Please verify your email. We sent a new verification link."
+          : `Please verify your email. Could not send email: ${sendResult?.msg}`,
+      });
+    }
+
+    const token_version = crypto.randomUUID();
+    await query(`UPDATE user SET token_version = ? WHERE uid = ?`, [
+      token_version,
+      user.uid,
+    ]);
+
+    const token = sign(
+      { uid: user.uid, role: "user", email: user.email, token_version },
+      env?.jwt,
+      {},
+    );
+    return res.json({ success: true, token });
+  } catch (err) {
+    console.log(err);
+    res.json({ msg: "Something went wrong", err, success: false });
+  }
+});
+
+// ─────────────────────────────────────────────
+// Signup (new users only)
+// ─────────────────────────────────────────────
+router.post("/signup", async (req, res) => {
+  try {
+    const {
+      email: emailBefore,
+      password,
+      referral_code,
+      first_name,
+      last_name,
+      name: fullName,
+    } = req.body;
+
+    if (!emailBefore || !password) {
+      return res.json({
+        msg: "Email and password is required",
+        success: false,
+      });
+    }
+
+    const email = String(emailBefore || "").toLowerCase().trim();
+    if (!validateEmail(email)) {
+      return res.json({ msg: "Please enter a valid email", success: false });
+    }
+
+    if (String(password).length < 6) {
+      return res.json({
+        msg: "Password must be at least 6 characters",
+        success: false,
+      });
+    }
+
+    const firstName = String(first_name || "").trim();
+    const lastName = String(last_name || "").trim();
+    const name =
+      [firstName, lastName].filter(Boolean).join(" ").trim() ||
+      String(fullName || "").trim() ||
+      null;
+
+    if (!firstName || !lastName) {
+      return res.json({
+        msg: "First name and last name are required",
+        success: false,
+      });
+    }
+
+    const [existing] = await query(`SELECT uid FROM user WHERE email = ?`, [
+      email,
+    ]);
+    if (existing) {
+      return res.json({
+        success: false,
+        msg: "An account with this email already exists. Please login.",
+        needsLogin: true,
+      });
+    }
+
+    const haspass = await bcrypt.hash(password, 10);
+    const uid = randomstring.generate();
+    const token_version = crypto.randomUUID();
+    const referralCode = await generateReferralCode();
+    const verifyToken = crypto.randomBytes(32).toString("hex");
+
+    await query(
+      `INSERT INTO user
+       (uid, name, email, password, token_version, referral_code, email_verified, email_verify_token, email_verify_sent_at)
+       VALUES (?,?,?,?,?,?,0,?,NOW())`,
+      [uid, name, email, haspass, token_version, referralCode, verifyToken],
+    );
+    await applyReferralCredits({ uid, referralCode: referral_code });
+    const sendResult = await sendVerificationEmail({
+      req,
+      email,
+      token: verifyToken,
+    });
+
+    return res.json({
+      success: true,
+      emailVerificationRequired: true,
+      email,
+      msg: sendResult?.success
+        ? "Account created. Please verify your email — we sent a verification link to your inbox."
+        : `Account created, but verification email could not be sent: ${sendResult?.msg}`,
+    });
   } catch (err) {
     console.log(err);
     res.json({ msg: "Something went wrong", err, success: false });
@@ -496,7 +563,7 @@ router.get("/referral_info", validateUser, async (req, res) => {
       success: true,
       data: {
         referral_code: user.referral_code,
-        referral_link: `${String(baseUrl).replace(/\/$/, "")}/user/login?ref=${user.referral_code}`,
+        referral_link: `${String(baseUrl).replace(/\/$/, "")}/user/signup?ref=${user.referral_code}`,
         enabled: Number(settings?.referral_enabled ?? 1) === 1,
         signup_credits: Number(settings?.referral_signup_credits || 0),
         referrer_credits: Number(settings?.referral_referrer_credits || 0),

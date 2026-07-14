@@ -89,12 +89,11 @@ const CheckOut = () => {
     })();
   }, [id, done, productType, lang]);
 
-  // ── only show gateways that are active AND have a component ready ─────────
+  // Razorpay is the primary gateway (PayPal is available inside Razorpay checkout).
+  // Standalone PayPal is not used when Razorpay is active.
   const activeGateways = Object.entries(gateways).filter(([key, val]) => {
     if (!val.active || !GATEWAY_COMPONENTS[key]) return false;
-    if (currency.country !== "IN" && key === "razorpay") {
-      return false;
-    }
+    if (key === "paypal" && gateways?.razorpay?.active) return false;
     return true;
   });
 
@@ -228,6 +227,13 @@ const CheckOut = () => {
                   <Typography variant="caption" color="text.disabled">
                     {lang?.priceIn || "Price in"} {currency.code}
                   </Typography>
+
+                  {currency.country !== "IN" && gateways?.razorpay?.active && (
+                    <Alert severity="info" sx={{ py: 0.5 }}>
+                      {lang?.razorpayIntlNote ||
+                        "International payments are processed via Razorpay in INR. PayPal / cards appear inside the Razorpay checkout when enabled on your Razorpay account."}
+                    </Alert>
+                  )}
 
                   <Divider />
 

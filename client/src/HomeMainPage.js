@@ -13,6 +13,7 @@ import AdminLogin from "./admin/login/AdminLogin";
 import LoadingComp from "./LoadingComp";
 import AdminDashboard from "./admin/dashboard/AdminDashboard";
 import UserLogin from "./user/login/UserLogin";
+import UserSignup from "./user/login/UserSignup";
 import UserDashboard from "./user/dashboard/UserDashboard";
 import BlogView from "./frontend/blogs/BlogView";
 import SeoComp from "./SeoComp";
@@ -114,6 +115,7 @@ const HomeMainPage = () => {
           <PublicRoute path="/admin/login" exact component={AdminLogin} />
           <AdminRoute path="/admin" exact component={AdminDashboard} />
           <PublicRoute path="/user/login" exact component={UserLogin} />
+          <PublicRoute path="/user/signup" exact component={UserSignup} />
           <UserRoute path="/user" exact component={UserDashboard} />
           <PublicRoute path="/blogs" exact component={BlogView} />
           <PublicRoute path="/blogs/:slug" exact component={BlogView} />

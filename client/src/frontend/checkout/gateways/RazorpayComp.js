@@ -2,6 +2,7 @@ import React from "react";
 import { Button, CircularProgress } from "@mui/material";
 import { GlobalContext } from "../../../context/GlobalContext";
 import { TranslateContext } from "../../../context/TranslateContext";
+import { useCurrency } from "../../../context/CurrencyContext";
 import { withCountry } from "../../../utils/currency";
 
 // load Razorpay script once
@@ -25,13 +26,14 @@ const RazorpayComp = ({
 }) => {
   const { hitAxios } = React.useContext(GlobalContext);
   const { lang } = React.useContext(TranslateContext);
+  const { country } = useCurrency();
 
   const isLoading = paying === "razorpay";
+  const isIndia = country === "IN";
 
   async function handleRazorpay() {
     setPaying("razorpay");
 
-    // 1. load script
     const loaded = await loadRazorpayScript();
     if (!loaded) {
       alert("Failed to load Razorpay. Check your internet connection.");
@@ -39,15 +41,17 @@ const RazorpayComp = ({
       return;
     }
 
-    // 2. create order on backend
+    // Always create INR orders on Razorpay (Indian merchant account).
+    // International users can still pay via PayPal / international cards
+    // inside the Razorpay modal when those methods are enabled in the dashboard.
     const res = await hitAxios({
       path: "/api/payment/razorpay/create-order",
       admin: false,
       post: true,
       obj: withCountry(
         productType === "credit_package"
-          ? { product_type: productType, package_id: plan.id, country: "IN" }
-          : { plan_id: plan.id, country: "IN" },
+          ? { product_type: productType, package_id: plan.id }
+          : { plan_id: plan.id },
       ),
     });
 
@@ -67,23 +71,24 @@ const RazorpayComp = ({
 
     if (isTestMode) {
       console.info(
-        "Razorpay test mode: use Indian test card 5267 3181 8797 5449 or UPI success@razorpay. International cards are not supported.",
+        "Razorpay test mode: use Indian test card 5267 3181 8797 5449 or UPI success@razorpay. International cards / PayPal need live mode + dashboard enablement.",
       );
     }
 
-    // 3. open Razorpay modal
     const options = {
       key: keyId,
-      amount: amount,
+      amount,
       currency: currency || "INR",
       name: planMeta.title,
       description: planMeta.description,
       order_id: orderId,
 
+      // PayPal + cards/wallets are controlled from Razorpay Dashboard.
+      // Keep all common methods on so international PayPal can appear.
       method: {
-        upi: true,
+        upi: isIndia,
         card: true,
-        netbanking: true,
+        netbanking: isIndia,
         wallet: true,
         emi: false,
         paylater: false,
@@ -98,7 +103,6 @@ const RazorpayComp = ({
       },
 
       handler: async function (response) {
-        // 4. verify on backend after user pays
         const verifyRes = await hitAxios({
           path: "/api/payment/razorpay/verify-order",
           admin: false,
@@ -114,7 +118,6 @@ const RazorpayComp = ({
         });
 
         if (verifyRes.data.success) {
-          // redirect to success page
           window.location.href = `/checkout/success?gateway=razorpay&verified=1&product_type=${productType}`;
         } else {
           alert(verifyRes.data.msg || "Payment verification failed");
@@ -124,7 +127,7 @@ const RazorpayComp = ({
 
       modal: {
         ondismiss: function () {
-          setPaying(""); // user closed modal without paying
+          setPaying("");
         },
       },
 
@@ -134,7 +137,7 @@ const RazorpayComp = ({
       },
 
       theme: {
-        color: "#6366f1", // matches your primary color — or pass as prop
+        color: "#6366f1",
       },
     };
 
@@ -146,8 +149,8 @@ const RazorpayComp = ({
       if (/international card/i.test(description)) {
         alert(
           isTestMode
-            ? "International cards are not supported in Razorpay test mode. Please use Indian test card 5267 3181 8797 5449 (any CVV/expiry) or UPI: success@razorpay."
-            : "International cards are not supported. Please pay with an Indian card, UPI, or netbanking.",
+            ? "International cards are not supported in Razorpay test mode. Use Indian test card 5267 3181 8797 5449 or UPI: success@razorpay."
+            : "International card failed. Please try PayPal (if shown) or another card enabled in your Razorpay account.",
         );
       } else {
         alert(description);
@@ -156,7 +159,7 @@ const RazorpayComp = ({
     });
 
     rzp.open();
-    setPaying(""); // reset after modal opens — modal handles its own state
+    setPaying("");
   }
 
   return (
@@ -184,7 +187,10 @@ const RazorpayComp = ({
     >
       {isLoading
         ? lang?.loading || "Loading..."
-        : lang?.payWith_razorpay || "Pay with Razorpay"}
+        : isIndia
+          ? lang?.payWith_razorpay || "Pay with Razorpay"
+          : lang?.payWith_razorpay_intl ||
+            "Pay with Razorpay (Card / PayPal)"}
     </Button>
   );
 };

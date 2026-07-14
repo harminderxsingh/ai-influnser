@@ -229,6 +229,10 @@ const PaymentGateway = ({ lang }) => {
                 onChange={set}
                 name="rz_key"
               />
+              <Typography variant="caption" color="text.secondary">
+                {lang?.razorpayIntlHint ||
+                  "Domestic: UPI / cards / netbanking. International: enable International Cards + PayPal in Razorpay Dashboard → Payment Methods."}
+              </Typography>
             </Stack>
           </SectionCard>
         </Grid>
@@ -240,6 +244,10 @@ const PaymentGateway = ({ lang }) => {
               title={lang?.paypal || "PayPal"}
             >
               <Stack spacing={2}>
+                <Typography variant="body2" color="text.secondary">
+                  {lang?.paypalViaRazorpayHint ||
+                    "For international payments, enable PayPal inside your Razorpay Dashboard (Payment Methods). Checkout uses Razorpay only — this standalone PayPal section is optional and hidden when Razorpay is active."}
+                </Typography>
                 <FormControlLabel
                   control={
                     <Switch
@@ -252,7 +260,8 @@ const PaymentGateway = ({ lang }) => {
                   }
                   label={
                     <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableGateway || "Enable Gateway"}
+                      {lang?.enableStandalonePaypal ||
+                        "Enable standalone PayPal (legacy)"}
                     </Typography>
                   }
                 />

@@ -25,11 +25,14 @@ const PayPalComp = ({
           ? { product_type: productType, package_id: plan.id }
           : { plan_id: plan.id },
     });
-    if (res.data.success) {
-      window.location.href = res.data.url; // redirect to PayPal hosted page
-    } else {
-      setPaying("");
+    if (res?.data?.success && res.data.url) {
+      // Full redirect to PayPal hosted checkout (avoids browser CORS with paypal.com).
+      window.location.assign(res.data.url);
+      return;
     }
+
+    setPaying("");
+    alert(res?.data?.msg || "Unable to start PayPal checkout");
   }
 
   return (

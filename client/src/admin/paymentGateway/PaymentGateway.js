@@ -245,8 +245,8 @@ const PaymentGateway = ({ lang }) => {
             >
               <Stack spacing={2}>
                 <Typography variant="body2" color="text.secondary">
-                  {lang?.paypalViaRazorpayHint ||
-                    "For international payments, enable PayPal inside your Razorpay Dashboard (Payment Methods). Checkout uses Razorpay only — this standalone PayPal section is optional and hidden when Razorpay is active."}
+                  {lang?.paypalLiveHint ||
+                    "Use Live Client ID + Secret from PayPal Developer Dashboard, and set Mode to Live. Return URL must match your live domain."}
                 </Typography>
                 <FormControlLabel
                   control={
@@ -260,8 +260,7 @@ const PaymentGateway = ({ lang }) => {
                   }
                   label={
                     <Typography variant="body2" fontWeight={500}>
-                      {lang?.enableStandalonePaypal ||
-                        "Enable standalone PayPal (legacy)"}
+                      {lang?.enableGateway || "Enable Gateway"}
                     </Typography>
                   }
                 />

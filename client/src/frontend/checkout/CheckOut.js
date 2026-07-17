@@ -89,13 +89,10 @@ const CheckOut = () => {
     })();
   }, [id, done, productType, lang]);
 
-  // Razorpay is the primary gateway (PayPal is available inside Razorpay checkout).
-  // Standalone PayPal is not used when Razorpay is active.
-  const activeGateways = Object.entries(gateways).filter(([key, val]) => {
-    if (!val.active || !GATEWAY_COMPONENTS[key]) return false;
-    if (key === "paypal" && gateways?.razorpay?.active) return false;
-    return true;
-  });
+  // Show every active gateway that has a checkout component.
+  const activeGateways = Object.entries(gateways).filter(
+    ([key, val]) => val.active && GATEWAY_COMPONENTS[key],
+  );
 
   // ── currency conversion ───────────────────────────────────────────────────
   const selectedPrice = plan?.price;

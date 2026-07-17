@@ -18,6 +18,39 @@ function getUsdCurrency() {
   };
 }
 
+function getFrontendBaseUrl() {
+  const env = getEnv();
+  return String(
+    process.env.FRONTEND_URL ||
+      process.env.APP_URL ||
+      env.frontendUrl ||
+      env.backendUrl ||
+      "https://myavatarlab.com",
+  ).replace(/\/$/, "");
+}
+
+function formatPaypalError(err) {
+  try {
+    if (err?.message) {
+      const parsed = JSON.parse(err.message);
+      const detail =
+        parsed?.details?.[0]?.description ||
+        parsed?.details?.[0]?.issue ||
+        parsed?.message ||
+        parsed?.error_description;
+      if (detail) return detail;
+      if (parsed?.name) return `${parsed.name}: ${parsed.message || "PayPal error"}`;
+    }
+  } catch (_) {
+    // not JSON
+  }
+  return (
+    err?.message ||
+    err?._originalError?.message ||
+    "PayPal request failed"
+  );
+}
+
 // ── helper: USD price → smallest unit (cents) ─────────────────────────────────
 function toSmallestUnit(usdPrice) {
   return Math.round(parseFloat(usdPrice || 0) * 100);
@@ -231,13 +264,20 @@ async function getPayPalClient() {
   if (!pay_paypal_id) throw new Error("PayPal client ID not configured");
   if (!pay_paypal_key) throw new Error("PayPal secret not configured");
 
+  const mode = paypal_mode === "sandbox" ? "sandbox" : "live";
   const Environment =
-    paypal_mode === "sandbox"
+    mode === "sandbox"
       ? paypal.core.SandboxEnvironment
       : paypal.core.LiveEnvironment;
-  const environment = new Environment(pay_paypal_id, pay_paypal_key);
+  const environment = new Environment(
+    String(pay_paypal_id).trim(),
+    String(pay_paypal_key).trim(),
+  );
 
-  return new paypal.core.PayPalHttpClient(environment);
+  return {
+    client: new paypal.core.PayPalHttpClient(environment),
+    mode,
+  };
 }
 
 // ── POST /api/payment/paypal/create-order ─────────────────────────────────────
@@ -251,17 +291,34 @@ router.post("/paypal/create-order", userValidator, async (req, res) => {
     );
     const amount = getPurchaseAmount(item, billingInterval);
 
-    // ✅ FIX: no destructuring
-    const client = await getPayPalClient();
+    const { client, mode } = await getPayPalClient();
 
     const { code } = getUsdCurrency();
-    const appUrl = process.env.APP_URL || "https://myavatarlab.com";
+    const frontendUrl = getFrontendBaseUrl();
 
     const localAmount = toUsdAmount(amount);
+    if (!(localAmount > 0)) {
+      return res.json({ success: false, msg: "Invalid payment amount" });
+    }
+
+    // PayPal custom_id max length is 127 chars — keep it compact.
     const metadata = {
       ...getPurchaseMetadata(item, uid),
-      ...(billingInterval ? { billing_interval: billingInterval } : {}),
+      ...(billingInterval ? { bi: billingInterval } : {}),
     };
+    const customId = JSON.stringify(metadata);
+    if (customId.length > 127) {
+      return res.json({
+        success: false,
+        msg: "Payment metadata too long for PayPal. Please contact support.",
+      });
+    }
+
+    const description = `${item.title} — ${
+      billingInterval
+        ? `${item.credits} credits · ${billingInterval}`
+        : item.description || item.title
+    }`.slice(0, 127);
 
     const request = new paypal.orders.OrdersCreateRequest();
     request.prefer("return=representation");
@@ -274,24 +331,20 @@ router.post("/paypal/create-order", userValidator, async (req, res) => {
             currency_code: code.toUpperCase(),
             value: localAmount.toFixed(2),
           },
-          description: `${item.title} — ${
-            billingInterval
-              ? `${item.credits} credits · ${billingInterval}`
-              : item.description
-          }`,
-          custom_id: JSON.stringify(metadata),
+          description,
+          custom_id: customId,
         },
       ],
       application_context: {
         brand_name: process.env.APP_NAME || "App",
-        landing_page: "BILLING",
+        landing_page: "NO_PREFERENCE",
         user_action: "PAY_NOW",
-        return_url: `${appUrl}/checkout/success?gateway=paypal`,
-        cancel_url: `${appUrl}${getCancelPath(item)}?cancelled=true`,
+        shipping_preference: "NO_SHIPPING",
+        return_url: `${frontendUrl}/checkout/success?gateway=paypal`,
+        cancel_url: `${frontendUrl}${getCancelPath(item)}?cancelled=true`,
       },
     });
 
-    // ✅ correct usage
     const order = await client.execute(request);
 
     const approveUrl = order.result.links.find(
@@ -309,13 +362,14 @@ router.post("/paypal/create-order", userValidator, async (req, res) => {
       success: true,
       url: approveUrl,
       orderId: order.result.id,
+      mode,
     });
   } catch (err) {
     console.log("PayPal create order error:", err);
 
     return res.json({
       success: false,
-      msg: err.message || "PayPal order creation failed",
+      msg: formatPaypalError(err) || "PayPal order creation failed",
     });
   }
 });
@@ -326,7 +380,11 @@ router.post("/paypal/verify-order", userValidator, async (req, res) => {
     const { order_id } = req.body;
     const uid = req.decode.uid;
 
-    const client = await getPayPalClient();
+    if (!order_id) {
+      return res.json({ success: false, msg: "PayPal order id is required" });
+    }
+
+    const { client } = await getPayPalClient();
 
     // capture the payment
     const captureRequest = new paypal.orders.OrdersCaptureRequest(order_id);
@@ -336,12 +394,21 @@ router.post("/paypal/verify-order", userValidator, async (req, res) => {
     const result = capture.result;
 
     if (result.status !== "COMPLETED") {
-      return res.json({ success: false, msg: "Payment not completed" });
+      return res.json({
+        success: false,
+        msg: `Payment not completed (status: ${result.status || "unknown"})`,
+      });
     }
 
     // extract purchase metadata from custom_id we stored earlier
     const customId = result.purchase_units?.[0]?.custom_id;
-    const parsed = JSON.parse(customId || "{}");
+    let parsed = {};
+    try {
+      parsed = JSON.parse(customId || "{}");
+    } catch (_) {
+      return res.json({ success: false, msg: "Invalid PayPal order metadata" });
+    }
+
     const item = await getPurchaseItem({
       productType: parsed.product_type || "plan",
       productId:
@@ -366,6 +433,7 @@ router.post("/paypal/verify-order", userValidator, async (req, res) => {
         success: true,
         msg: "Plan already activated",
         alreadyDone: true,
+        product_type: item.productType,
       });
     }
 
@@ -385,8 +453,8 @@ router.post("/paypal/verify-order", userValidator, async (req, res) => {
         capture_id: captureId,
         payer_email: payerEmail,
         payer_id: payerId,
-        ...(parsed.billing_interval
-          ? { billing_interval: parsed.billing_interval }
+        ...(parsed.bi || parsed.billing_interval
+          ? { billing_interval: parsed.bi || parsed.billing_interval }
           : {}),
       },
     });
@@ -406,10 +474,10 @@ router.post("/paypal/verify-order", userValidator, async (req, res) => {
       product_type: item.productType,
     });
   } catch (err) {
-    console.log(err);
+    console.log("PayPal verify order error:", err);
     res.json({
       success: false,
-      msg: err.message || "PayPal verification failed",
+      msg: formatPaypalError(err) || "PayPal verification failed",
     });
   }
 });

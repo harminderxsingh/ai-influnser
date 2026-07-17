@@ -31,6 +31,16 @@ const CheckoutSuccess = () => {
   const product_type = searchParams.get("product_type");
 
   React.useEffect(() => {
+    const cancelled =
+      searchParams.get("cancelled") === "true" ||
+      searchParams.get("cancel") === "true";
+
+    if (cancelled) {
+      setStatus("error");
+      setMsg(lang?.paymentCancelled || "Payment was cancelled.");
+      return;
+    }
+
     if (gateway === "razorpay" && verified === "1") {
       setSuccessProductType(product_type || "");
       setStatus("success");

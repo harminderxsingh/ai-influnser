@@ -225,15 +225,8 @@ const CheckOut = () => {
 
                   {/* currency info */}
                   <Typography variant="caption" color="text.disabled">
-                    {lang?.priceIn || "Price in"} {currency.code}
+                    {lang?.priceIn || "Price in"} USD
                   </Typography>
-
-                  {currency.country !== "IN" && gateways?.razorpay?.active && (
-                    <Alert severity="info" sx={{ py: 0.5 }}>
-                      {lang?.razorpayIntlNote ||
-                        "International payments are processed via Razorpay in INR. PayPal / cards appear inside the Razorpay checkout when enabled on your Razorpay account."}
-                    </Alert>
-                  )}
 
                   <Divider />
 

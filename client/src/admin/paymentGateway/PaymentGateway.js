@@ -230,8 +230,8 @@ const PaymentGateway = ({ lang }) => {
                 name="rz_key"
               />
               <Typography variant="caption" color="text.secondary">
-                {lang?.razorpayIntlHint ||
-                  "Domestic: UPI / cards / netbanking. International: enable International Cards + PayPal in Razorpay Dashboard → Payment Methods."}
+                {lang?.razorpayUsdHint ||
+                  "Checkout charges in USD. Ensure USD / international currency is enabled on your Razorpay account."}
               </Typography>
             </Stack>
           </SectionCard>

@@ -8,93 +8,23 @@ const paypal = require("@paypal/checkout-server-sdk");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 
-function detectCountry(req = null) {
-  const rawCountry =
-    req?.body?.country ||
-    req?.query?.country ||
-    req?.headers?.["x-country-code"] ||
-    req?.headers?.["cf-ipcountry"] ||
-    req?.headers?.["x-vercel-ip-country"] ||
-    "US";
-
-  return String(rawCountry).trim().toUpperCase();
-}
-
-function getUsdToInrRateFallback() {
-  const configuredRate = parseFloat(process.env.USD_TO_INR_RATE || "");
-  return Number.isFinite(configuredRate) && configuredRate > 0 ? configuredRate : 95;
-}
-
-async function getUsdToInrRate() {
-  try {
-    const [row] = await query(
-      `SELECT currency_exchange_rate FROM web_public LIMIT 1`,
-      [],
-    );
-    const rate = parseFloat(row?.currency_exchange_rate);
-    if (Number.isFinite(rate) && rate > 1) return rate;
-  } catch (_) {
-    // fall through to env/default
-  }
-  return getUsdToInrRateFallback();
-}
-
-async function getCurrency(req = null) {
-  const country = detectCountry(req);
-  if (country === "IN" || country === "INDIA") {
-    return {
-      symbol: "₹",
-      code: "INR",
-      rate: await getUsdToInrRate(),
-      base: "USD",
-      country: "IN",
-    };
-  }
-
+function getUsdCurrency() {
   return {
     symbol: "$",
     code: "USD",
     rate: 1,
     base: "USD",
-    country: country || "US",
+    country: "US",
   };
 }
 
-async function getRazorpayCurrency() {
-  return {
-    symbol: "₹",
-    code: "INR",
-    rate: await getUsdToInrRate(),
-    base: "USD",
-    country: "IN",
-  };
+// ── helper: USD price → smallest unit (cents) ─────────────────────────────────
+function toSmallestUnit(usdPrice) {
+  return Math.round(parseFloat(usdPrice || 0) * 100);
 }
 
-// ── helper: convert USD price → smallest unit ─────────────────────────────────
-function toSmallestUnit(usdPrice, rate, code) {
-  const localAmount = parseFloat(usdPrice) * rate;
-  // these currencies have no decimal / smallest unit = 1
-  const zeroDecimal = [
-    "JPY",
-    "KRW",
-    "VND",
-    "CLP",
-    "GNF",
-    "MGA",
-    "PYG",
-    "RWF",
-    "UGX",
-    "XAF",
-    "XOF",
-  ];
-  if (zeroDecimal.includes(code.toUpperCase())) {
-    return Math.round(localAmount);
-  }
-  return Math.round(localAmount * 100); // cents / paise / kobo etc
-}
-
-function toLocalAmount(usdPrice, rate) {
-  return parseFloat((parseFloat(usdPrice) * rate).toFixed(2));
+function toUsdAmount(usdPrice) {
+  return parseFloat((parseFloat(usdPrice || 0) || 0).toFixed(2));
 }
 
 function getPurchaseInput(body = {}) {
@@ -324,10 +254,10 @@ router.post("/paypal/create-order", userValidator, async (req, res) => {
     // ✅ FIX: no destructuring
     const client = await getPayPalClient();
 
-    const { code, rate } = await getCurrency(req);
+    const { code } = getUsdCurrency();
     const appUrl = process.env.APP_URL || "https://myavatarlab.com";
 
-    const localAmount = toLocalAmount(amount, rate);
+    const localAmount = toUsdAmount(amount);
     const metadata = {
       ...getPurchaseMetadata(item, uid),
       ...(billingInterval ? { billing_interval: billingInterval } : {}),
@@ -511,11 +441,11 @@ router.post("/razorpay/create-order", userValidator, async (req, res) => {
     const amount = getPurchaseAmount(item, billingInterval);
 
     const { instance, rz_id } = await getRazorpayInstance();
-    const { code, rate } = await getRazorpayCurrency();
+    const { code } = getUsdCurrency();
 
     const order = await instance.orders.create({
-      amount: toSmallestUnit(amount, rate, code),
-      currency: "INR",
+      amount: toSmallestUnit(amount),
+      currency: code,
       receipt: createRazorpayReceipt(),
       notes: {
         ...getPurchaseMetadata(item, uid),
@@ -589,8 +519,7 @@ router.post("/razorpay/verify-order", userValidator, async (req, res) => {
       getPurchaseInput({ plan_id, package_id, product_type }),
     );
     const billingInterval = getPurchaseBillingInterval(item, billing_interval);
-    const { rate } = await getRazorpayCurrency();
-    const amount = toLocalAmount(getPurchaseAmount(item, billingInterval), rate);
+    const amount = toUsdAmount(getPurchaseAmount(item, billingInterval));
 
     const order = await savePaidOrder({
       uid,
@@ -629,8 +558,7 @@ router.post("/razorpay/verify-order", userValidator, async (req, res) => {
 // ── GET /api/payment/currency ─────────────────────────────────────────────────
 router.get("/currency", async (req, res) => {
   try {
-    const currency = await getCurrency(req);
-    res.json({ success: true, data: currency });
+    res.json({ success: true, data: getUsdCurrency() });
   } catch (err) {
     res.json({ success: false, msg: err.message });
   }

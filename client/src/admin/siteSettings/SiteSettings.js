@@ -126,12 +126,9 @@ const SiteSettings = ({ lang }) => {
           custom_homepage_enabled: d.custom_homepage_enabled === 1,
           custom_homepage_url: d.custom_homepage_url || "",
           youtube_tutorial_url: d.youtube_tutorial_url || "",
-          currency_symbol: d.currency_symbol || "$",
-          currency_code: d.currency_code || "USD",
-          currency_exchange_rate: (() => {
-            const rate = parseFloat(d.currency_exchange_rate);
-            return Number.isFinite(rate) && rate > 1 ? String(rate) : "95";
-          })(),
+          currency_symbol: "$",
+          currency_code: "USD",
+          currency_exchange_rate: "1",
           referral_enabled: d.referral_enabled !== 0,
           referral_signup_credits: d.referral_signup_credits || 0,
           referral_referrer_credits: d.referral_referrer_credits || 0,
@@ -171,7 +168,6 @@ const SiteSettings = ({ lang }) => {
 
   const handleSave = async () => {
     setSaving(true);
-    const exchangeRate = parseFloat(form.currency_exchange_rate);
     const res = await hitAxios({
       path: "/api/web/save_web_public",
       post: true,
@@ -180,22 +176,12 @@ const SiteSettings = ({ lang }) => {
         ...form,
         currency_symbol: "$",
         currency_code: "USD",
-        currency_exchange_rate:
-          Number.isFinite(exchangeRate) && exchangeRate > 0 ? exchangeRate : 95,
+        currency_exchange_rate: 1,
         custom_homepage_enabled: form.custom_homepage_enabled ? 1 : 0,
         referral_enabled: form.referral_enabled ? 1 : 0,
       },
     });
     setSaving(false);
-
-    if (res?.data?.success) {
-      setForm((prev) => ({
-        ...prev,
-        currency_exchange_rate: String(
-          Number.isFinite(exchangeRate) && exchangeRate > 0 ? exchangeRate : 95,
-        ),
-      }));
-    }
   };
 
   const mediaUrl = (name) => (name ? `/media/${name}` : null);
@@ -591,40 +577,25 @@ const SiteSettings = ({ lang }) => {
         <Section
           title={lang?.currencySettings || "Currency Settings"}
           icon={CurrencyExchangeOutlined}
-          chip="USD → INR"
+          chip="USD"
         >
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Typography variant="body2" color="text.secondary">
-                {lang?.usdInrCurrencyInfo ||
-                  "Plan and credit package prices are stored in USD. India visitors see and pay in INR using the rate below."}
+                {lang?.usdOnlyCurrencyInfo ||
+                  "All plan and credit package prices are stored, displayed, and charged in USD only. No currency conversion."}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 size="small"
-                label={lang?.baseCurrency || "Base Currency (Admin Entry)"}
+                label={lang?.currency || "Currency"}
                 value="USD ($)"
                 InputProps={{ readOnly: true }}
                 helperText={
-                  lang?.baseCurrencyHint ||
-                  "Enter plan/package prices in USD everywhere in admin"
-                }
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                size="small"
-                type="number"
-                label={lang?.usdToInrRate || "USD to INR Rate"}
-                value={form.currency_exchange_rate}
-                onChange={(e) => set("currency_exchange_rate", e.target.value)}
-                inputProps={{ min: 1, step: "0.01" }}
-                helperText={
-                  lang?.usdToInrRateHint ||
-                  "Example: 95 means $1 = ₹95 for India users (display + Razorpay)"
+                  lang?.usdOnlyHint ||
+                  "Enter all prices in USD in admin. Checkout and gateways use USD."
                 }
               />
             </Grid>

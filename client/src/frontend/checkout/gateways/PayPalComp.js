@@ -3,8 +3,6 @@ import { Button, CircularProgress } from "@mui/material";
 import { GlobalContext } from "../../../context/GlobalContext";
 import { TranslateContext } from "../../../context/TranslateContext";
 
-import { withCountry } from "../../../utils/currency";
-
 const PayPalComp = ({
   plan,
   productType = "plan",
@@ -22,11 +20,10 @@ const PayPalComp = ({
       path: "/api/payment/paypal/create-order",
       admin: false,
       post: true,
-      obj: withCountry(
+      obj:
         productType === "credit_package"
           ? { product_type: productType, package_id: plan.id }
           : { plan_id: plan.id },
-      ),
     });
     if (res.data.success) {
       window.location.href = res.data.url; // redirect to PayPal hosted page

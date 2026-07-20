@@ -18,6 +18,12 @@ import { GlobalContext } from "../../context/GlobalContext";
 import { useHistory } from "react-router-dom/cjs/react-router-dom";
 import ForgotPassword from "./ForgotPassword";
 import AuthLayout from "./AuthLayout";
+import {
+  buildSignupPath,
+  getPostAuthPath,
+  getRedirectFromSearch,
+  isUserLoggedIn,
+} from "../../utils/authRedirect";
 
 const UserLogin = () => {
   const history = useHistory();
@@ -28,6 +34,12 @@ const UserLogin = () => {
     password: "",
   });
 
+  React.useEffect(() => {
+    if (isUserLoggedIn()) {
+      history.replace(getPostAuthPath());
+    }
+  }, [history]);
+
   async function handleLogin() {
     const res = await hitAxios({
       path: "/api/user/login",
@@ -37,7 +49,7 @@ const UserLogin = () => {
     });
 
     if (res?.data?.needsSignup) {
-      history.push("/user/signup");
+      history.push(buildSignupPath(getRedirectFromSearch()));
       return;
     }
 
@@ -52,7 +64,7 @@ const UserLogin = () => {
         process.env.REACT_APP_TOKEN + "_user",
         res.data.token,
       );
-      history.push("/user");
+      history.push(getPostAuthPath());
     }
   }
 
@@ -151,7 +163,9 @@ const UserLogin = () => {
             {lang?.noAccountYet || "Don't have an account?"}{" "}
             <Box
               component="span"
-              onClick={() => history.push("/user/signup")}
+              onClick={() =>
+                history.push(buildSignupPath(getRedirectFromSearch()))
+              }
               sx={{
                 color: "primary.main",
                 fontWeight: 600,

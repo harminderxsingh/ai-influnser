@@ -20,6 +20,7 @@ import { useCustomTheme } from "../../utils/useCustomTheme";
 import { GlobalContext } from "../../context/GlobalContext";
 import { TranslateContext } from "../../context/TranslateContext";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
+import { isUserLoggedIn } from "../../utils/authRedirect";
 
 function scrollToSection(id) {
   const el = document.getElementById(id);
@@ -38,6 +39,15 @@ const Header = ({ web: webProp }) => {
   const { config, isDark, toggleColorMode } = useCustomTheme();
 
   const trigger = useScrollTrigger({ disableHysteresis: true, threshold: 20 });
+  const loggedIn = isUserLoggedIn();
+
+  const goAuth = (mode) => {
+    if (loggedIn) {
+      history.push("/user");
+      return;
+    }
+    history.push(mode === "signup" ? "/user/signup" : "/user/login");
+  };
 
   // ── nav links built from lang ──
   const NAV_LINKS = [
@@ -295,7 +305,7 @@ const Header = ({ web: webProp }) => {
             <ThemeToggleButton />
 
             <Button
-              onClick={() => history.push("/user/login")}
+              onClick={() => goAuth("login")}
               sx={{
                 color: textSecondary,
                 fontSize: config.button.text.fontSize,
@@ -311,11 +321,13 @@ const Header = ({ web: webProp }) => {
                 },
               }}
             >
-              {lang?.login || "Login"}
+              {loggedIn
+                ? lang?.dashboard || "Dashboard"
+                : lang?.login || "Login"}
             </Button>
 
             <Button
-              onClick={() => history.push("/user/signup")}
+              onClick={() => goAuth("signup")}
               variant="contained"
               disableElevation
               sx={{
@@ -337,7 +349,9 @@ const Header = ({ web: webProp }) => {
                 },
               }}
             >
-              {lang?.getStarted || "Get Started"}
+              {loggedIn
+                ? lang?.goToDashboard || lang?.dashboard || "Dashboard"
+                : lang?.getStarted || "Get Started"}
             </Button>
           </Box>
 
@@ -426,7 +440,10 @@ const Header = ({ web: webProp }) => {
         >
           <Button
             fullWidth
-            onClick={() => history.push("/user/login")}
+            onClick={() => {
+              goAuth("login");
+              setDrawerOpen(false);
+            }}
             sx={{
               color: textSecondary,
               fontFamily: config.font_family,
@@ -442,12 +459,17 @@ const Header = ({ web: webProp }) => {
               },
             }}
           >
-            {lang?.login || "Login"}
+            {loggedIn
+              ? lang?.dashboard || "Dashboard"
+              : lang?.login || "Login"}
           </Button>
 
           <Button
             fullWidth
-            onClick={() => history.push("/user/signup")}
+            onClick={() => {
+              goAuth("signup");
+              setDrawerOpen(false);
+            }}
             variant="contained"
             disableElevation
             sx={{
@@ -461,7 +483,9 @@ const Header = ({ web: webProp }) => {
               fontSize: config.button.contained.fontSize,
             }}
           >
-            {lang?.getStarted || "Get Started"}
+            {loggedIn
+              ? lang?.goToDashboard || lang?.dashboard || "Dashboard"
+              : lang?.getStarted || "Get Started"}
           </Button>
         </Box>
       </Drawer>

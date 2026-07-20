@@ -20,6 +20,12 @@ import {
 import { GlobalContext } from "../../context/GlobalContext";
 import { useHistory } from "react-router-dom/cjs/react-router-dom";
 import AuthLayout from "./AuthLayout";
+import {
+  buildLoginPath,
+  getPostAuthPath,
+  getRedirectFromSearch,
+  isUserLoggedIn,
+} from "../../utils/authRedirect";
 
 const UserSignup = () => {
   const history = useHistory();
@@ -43,6 +49,12 @@ const UserSignup = () => {
     }
   }, []);
 
+  React.useEffect(() => {
+    if (isUserLoggedIn()) {
+      history.replace(getPostAuthPath());
+    }
+  }, [history]);
+
   const set = (key, value) => setState((prev) => ({ ...prev, [key]: value }));
 
   async function handleSignup() {
@@ -54,7 +66,7 @@ const UserSignup = () => {
     });
 
     if (res?.data?.needsLogin) {
-      history.push("/user/login");
+      history.push(buildLoginPath(getRedirectFromSearch()));
       return;
     }
 
@@ -69,7 +81,7 @@ const UserSignup = () => {
         process.env.REACT_APP_TOKEN + "_user",
         res.data.token,
       );
-      history.push("/user");
+      history.push(getPostAuthPath());
     }
   }
 
@@ -218,7 +230,9 @@ const UserSignup = () => {
             {lang?.alreadyHaveAccount || "Already have an account?"}{" "}
             <Box
               component="span"
-              onClick={() => history.push("/user/login")}
+              onClick={() =>
+                history.push(buildLoginPath(getRedirectFromSearch()))
+              }
               sx={{
                 color: "primary.main",
                 fontWeight: 600,

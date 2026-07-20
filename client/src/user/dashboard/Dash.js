@@ -173,7 +173,7 @@ const taskLabel = (task) => TASK_LABELS[task] || task;
 // ─────────────────────────────────────────────────────────
 const Dash = ({ lang }) => {
   const { hitAxios } = useContext(GlobalContext);
-  const { userData } = useContext(UserContext);
+  const { userData, navigateToPage } = useContext(UserContext);
   const { config } = useCustomTheme();
   const history = useHistory();
 
@@ -398,14 +398,22 @@ const Dash = ({ lang }) => {
                     <Button
                       size="small"
                       variant="outlined"
-                      onClick={() => history.push("/#pricing")}
+                      onClick={() =>
+                        history.push({ pathname: "/", hash: "pricing" })
+                      }
                     >
                       {lang?.upgradePlan || "Upgrade Plan"}
                     </Button>
                     <Button
                       size="small"
                       variant="contained"
-                      onClick={() => history.push("/user?page=buy-credits")}
+                      onClick={() => {
+                        if (navigateToPage) {
+                          navigateToPage("buy-credits");
+                          return;
+                        }
+                        history.push("/user?page=buy-credits");
+                      }}
                     >
                       {lang?.buyCredits || "Buy Credits"}
                     </Button>

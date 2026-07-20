@@ -21,6 +21,8 @@ import FooterComp from "../components/FooterComp";
 import PayPalComp from "./gateways/PayPalComp";
 import RazorpayComp from "./gateways/RazorpayComp";
 import Free from "./gateways/Free";
+import { buildLoginPath, isUserLoggedIn } from "../../utils/authRedirect";
+import { useHistory } from "react-router-dom";
 
 // ── maps gateway key → component ─────────────────────────────────────────────
 const GATEWAY_COMPONENTS = {
@@ -34,6 +36,7 @@ const CheckOut = () => {
   const { hitAxios } = React.useContext(GlobalContext);
   const { currency, convertPrice } = useCurrency();
   const { id } = useParams();
+  const history = useHistory();
   const creditMatch = useRouteMatch("/checkout/credits/:id");
   const productType = creditMatch ? "credit_package" : "plan";
   const theme = useTheme();
@@ -47,9 +50,18 @@ const CheckOut = () => {
   const [loadingCheckout, setLoadingCheckout] = React.useState(true);
   const [checkoutError, setCheckoutError] = React.useState("");
 
+  // Require login before purchase; return here after auth.
+  React.useEffect(() => {
+    if (isUserLoggedIn()) return;
+    const returnTo = productType === "credit_package"
+      ? `/checkout/credits/${id}`
+      : `/checkout/${id}`;
+    history.replace(buildLoginPath(returnTo));
+  }, [id, productType, history]);
+
   // ── fetch once when id is available ──────────────────────────────────────
   React.useEffect(() => {
-    if (!id || done) return;
+    if (!id || done || !isUserLoggedIn()) return;
     setDone(true);
 
     (async () => {
@@ -106,6 +118,10 @@ const CheckOut = () => {
   const discount = localPriceStrike
     ? Math.round(((localPriceStrike - localPrice) / localPriceStrike) * 100)
     : null;
+
+  if (!isUserLoggedIn()) {
+    return null;
+  }
 
   return (
     <Box

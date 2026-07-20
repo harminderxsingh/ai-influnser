@@ -24,7 +24,7 @@ import ProfileDialog from "./ProfileDialog";
 const ProfileComp = ({ theme, lang }) => {
   const history = useHistory();
   const [anchor, setAnchor] = React.useState(null);
-  const { userData } = React.useContext(UserContext);
+  const { userData, navigateToPage } = React.useContext(UserContext);
 
   const handleClose = () => setAnchor(null);
 
@@ -34,9 +34,18 @@ const ProfileComp = ({ theme, lang }) => {
     history.push("/user");
   };
 
-  const nav = (path) => {
+  const goBuyCredits = () => {
     handleClose();
-    history.push(path);
+    if (navigateToPage) {
+      navigateToPage("buy-credits");
+      return;
+    }
+    history.push("/user?page=buy-credits");
+  };
+
+  const goUpgradePlan = () => {
+    handleClose();
+    history.push({ pathname: "/", hash: "pricing" });
   };
 
   // ── Parse plan safely ─────────────────────────────────
@@ -245,14 +254,14 @@ const ProfileComp = ({ theme, lang }) => {
 
         <Divider sx={{ my: 0.5 }} />
 
-        <MenuItem onClick={() => nav("/#pricing")}>
+        <MenuItem onClick={goUpgradePlan}>
           <ListItemIcon>
             <WorkspacePremiumOutlined sx={{ fontSize: 16 }} />
           </ListItemIcon>
           {lang?.upgradePlan || "Upgrade Plan"}
         </MenuItem>
 
-        <MenuItem onClick={() => nav("/user?page=buy-credits")}>
+        <MenuItem onClick={goBuyCredits}>
           <ListItemIcon>
             <TokenOutlined sx={{ fontSize: 16 }} />
           </ListItemIcon>

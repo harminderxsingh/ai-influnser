@@ -20,10 +20,12 @@ import {
   GroupAddOutlined,
   AutoAwesome,
   AutoStories,
+  Instagram,
 } from "@mui/icons-material";
 import { UserProvider } from "../../context/UserContext";
 import { GlobalContext } from "../../context/GlobalContext";
 import { usePanelChrome } from "../../utils/usePanelChrome";
+import { useLocation } from "react-router-dom";
 
 const UserDashboard = () => {
   const { lang } = React.useContext(TranslateContext);
@@ -55,6 +57,11 @@ const UserDashboard = () => {
       id: "influencers",
       text: lang?.influencers || "Influencers",
       icon: <Face2 />,
+    },
+    {
+      id: "link-instagram",
+      text: lang?.linkInsta || "Link Instagram",
+      icon: <Instagram />,
     },
     {
       id: "social-publishing-history",
@@ -144,6 +151,37 @@ const UserDashboard = () => {
     });
     return open;
   });
+  const location = useLocation();
+
+  const isValidPage = React.useCallback(
+    (page) =>
+      Boolean(
+        page &&
+          menuItems.some(
+            (i) => i.id === page || i.submenu?.some((s) => s.id === page),
+          ),
+      ),
+    // menu item ids are static; lang labels change but ids do not
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const goToPage = React.useCallback(
+    (id) => {
+      if (!isValidPage(id)) return;
+      setSelectedMenu(id);
+      const params = new URLSearchParams(window.location.search);
+      params.set("page", id);
+      window.history.pushState({}, "", `${window.location.pathname}?${params}`);
+      menuItems.forEach((item) => {
+        if (item.submenu?.some((s) => s.id === id)) {
+          setOpenSubmenus((prev) => ({ ...prev, [item.id]: true }));
+        }
+      });
+      if (isMobile) setMobileOpen(false);
+    },
+    [isMobile, isValidPage],
+  );
 
   const updateURL = (id) => {
     const params = new URLSearchParams(window.location.search);
@@ -167,10 +205,24 @@ const UserDashboard = () => {
     if (isMobile) setMobileOpen(false);
   };
 
+  // Sync when URL changes via react-router (e.g. Buy Credits / Upgrade links)
+  React.useEffect(() => {
+    const page = new URLSearchParams(location.search).get("page");
+    if (isValidPage(page) && page !== selectedMenu) {
+      setSelectedMenu(page);
+      menuItems.forEach((item) => {
+        if (item.submenu?.some((s) => s.id === page)) {
+          setOpenSubmenus((prev) => ({ ...prev, [item.id]: true }));
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   React.useEffect(() => {
     const onPop = () => {
       const page = new URLSearchParams(window.location.search).get("page");
-      if (page) {
+      if (isValidPage(page)) {
         setSelectedMenu(page);
         menuItems.forEach((item) => {
           if (item.submenu?.some((s) => s.id === page))
@@ -180,14 +232,14 @@ const UserDashboard = () => {
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  }, [isValidPage]);
 
   React.useEffect(() => {
     handleGetWeb();
   }, []);
 
   return (
-    <UserProvider>
+    <UserProvider navigateToPage={goToPage}>
       <Box
         sx={{
           display: "flex",

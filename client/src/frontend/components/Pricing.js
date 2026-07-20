@@ -14,6 +14,7 @@ import { TranslateContext } from "../../context/TranslateContext";
 import { useCustomTheme } from "../../utils/useCustomTheme";
 import moment from "moment";
 import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
+import { buildLoginPath, isUserLoggedIn } from "../../utils/authRedirect";
 
 // ─────────────────────────────────────────────
 const buildFeatures = (plan, lang) => [
@@ -26,6 +27,15 @@ const buildFeatures = (plan, lang) => [
 const PricingCard = ({ plan, history, formatPrice }) => {
   const { lang } = React.useContext(TranslateContext);
   const { config, isDark } = useCustomTheme();
+
+  const goCheckout = () => {
+    const checkoutPath = `/checkout/${plan.id}`;
+    if (isUserLoggedIn()) {
+      history.push(checkoutPath);
+      return;
+    }
+    history.push(buildLoginPath(checkoutPath));
+  };
 
   const bgDefault = isDark
     ? config.background_default_dark
@@ -358,7 +368,7 @@ const PricingCard = ({ plan, history, formatPrice }) => {
 
       {/* ── CTA ── */}
       <Box
-        onClick={() => history.push(`/checkout/${plan.id}`)}
+        onClick={goCheckout}
         component="a"
         sx={{
           width: "100%",

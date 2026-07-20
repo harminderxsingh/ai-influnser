@@ -14,7 +14,7 @@ export const useGlobal = () => {
   return context;
 };
 
-export const UserProvider = ({ children }) => {
+export const UserProvider = ({ children, navigateToPage }) => {
   const [userData, setUserData] = React.useState({});
   const { hitAxios } = React.useContext(GlobalContext);
 
@@ -34,7 +34,7 @@ export const UserProvider = ({ children }) => {
     getUserData();
   }, []);
 
-  const value = { getUserData, userData, setUserData };
+  const value = { getUserData, userData, setUserData, navigateToPage };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 };

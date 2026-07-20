@@ -20,7 +20,6 @@ import {
   GroupAddOutlined,
   AutoAwesome,
   AutoStories,
-  Instagram,
 } from "@mui/icons-material";
 import { UserProvider } from "../../context/UserContext";
 import { GlobalContext } from "../../context/GlobalContext";
@@ -57,11 +56,6 @@ const UserDashboard = () => {
       id: "influencers",
       text: lang?.influencers || "Influencers",
       icon: <Face2 />,
-    },
-    {
-      id: "link-instagram",
-      text: lang?.linkInsta || "Link Instagram",
-      icon: <Instagram />,
     },
     {
       id: "social-publishing-history",

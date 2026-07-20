@@ -23,6 +23,7 @@ import AboutUs from "./frontend/pages/AboutUs";
 import ContactUs from "./frontend/pages/ContactUs";
 import CheckOut from "./frontend/checkout/CheckOut";
 import CheckoutSuccess from "./frontend/checkout/CheckoutSuccess";
+import ThankYouPage from "./frontend/ThankYouPage";
 import PasswordRecovery from "./frontend/PasswordRecovery";
 import AdminPasswordRecovery from "./frontend/AdminPasswordRecovery";
 import NotFoundPage from "./frontend/NotFoundPage";
@@ -128,6 +129,7 @@ const HomeMainPage = () => {
             exact
             component={CheckoutSuccess}
           />
+          <PublicRoute path="/thank-you" exact component={ThankYouPage} />
           <PublicRoute path="/checkout/credits/:id" exact component={CheckOut} />
           <PublicRoute path="/checkout/:id" exact component={CheckOut} />
           <PublicRoute path="/launchpad" exact component={LaunchpadPage} />

@@ -15,7 +15,7 @@ const Free = ({ plan, paying, setPaying, lang }) => {
       obj: { id: plan?.id },
     });
     if (res.data.success) {
-      history.push("/user");
+      history.push("/thank-you?product_type=plan&free=1");
     }
   }
 

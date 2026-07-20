@@ -11,7 +11,8 @@ import {
   alpha,
   useTheme,
 } from "@mui/material";
-import { CheckCircleOutlined, ErrorOutlined } from "@mui/icons-material";
+import { ErrorOutlined } from "@mui/icons-material";
+import ThankYouPage from "../ThankYouPage";
 
 const CheckoutSuccess = () => {
   const { hitAxios } = React.useContext(GlobalContext);
@@ -51,10 +52,15 @@ const CheckoutSuccess = () => {
       );
     } else if (gateway === "paypal" && order_id) {
       verifyPayPal(order_id);
+    } else if (verified === "1" || searchParams.get("free") === "1") {
+      setSuccessProductType(product_type || "plan");
+      setStatus("success");
+      setMsg(lang?.planActivated || "Your plan has been activated successfully.");
     } else {
       setStatus("error");
       setMsg("Unknown payment gateway or missing session.");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleVerificationResponse(res) {
@@ -68,14 +74,18 @@ const CheckoutSuccess = () => {
     }
   }
 
-  async function verifyPayPal(order_id) {
+  async function verifyPayPal(orderId) {
     const res = await hitAxios({
       path: "/api/payment/paypal/verify-order",
       admin: false,
       post: true,
-      obj: { order_id },
+      obj: { order_id: orderId },
     });
     handleVerificationResponse(res);
+  }
+
+  if (status === "success") {
+    return <ThankYouPage productType={successProductType || product_type} />;
   }
 
   return (
@@ -107,45 +117,6 @@ const CheckoutSuccess = () => {
           </Stack>
         )}
 
-        {status === "success" && (
-          <Stack spacing={2} alignItems="center">
-            <Box
-              sx={{
-                width: 72,
-                height: 72,
-                borderRadius: "50%",
-                bgcolor: alpha(theme.palette.success.main, 0.1),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <CheckCircleOutlined
-                sx={{ fontSize: 40, color: "success.main" }}
-              />
-            </Box>
-            <Typography variant="h6" fontWeight={700}>
-              {lang?.paymentSuccess || "Payment Successful!"}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {msg}
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() =>
-                history.push(
-                  successProductType === "credit_package"
-                    ? "/user?page=buy-credits"
-                    : "/user",
-                )
-              }
-              sx={{ mt: 1, borderRadius: 2 }}
-            >
-              {lang?.goToDashboard || "Go to Dashboard"}
-            </Button>
-          </Stack>
-        )}
-
         {status === "error" && (
           <Stack spacing={2} alignItems="center">
             <Box
@@ -167,13 +138,22 @@ const CheckoutSuccess = () => {
             <Typography variant="body2" color="text.secondary">
               {msg}
             </Typography>
-            <Button
-              variant="outlined"
-              onClick={() => history.goBack()}
-              sx={{ mt: 1, borderRadius: 2 }}
-            >
-              {lang?.tryAgain || "Try Again"}
-            </Button>
+            <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
+              <Button
+                variant="outlined"
+                onClick={() => history.goBack()}
+                sx={{ borderRadius: 2 }}
+              >
+                {lang?.tryAgain || "Try Again"}
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => history.push("/contact")}
+                sx={{ borderRadius: 2 }}
+              >
+                {lang?.tyContactSupport || "Contact Support"}
+              </Button>
+            </Stack>
           </Stack>
         )}
       </Box>
